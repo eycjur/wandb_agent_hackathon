@@ -16,8 +16,8 @@
 - Judge LLM: `gemini-2.5-pro`
 
 ## Prompt Configuration
-- ドメイン定義は `/Users/suguru.masui/wandb_agent_hackathon/prompts/resume_summary.yml` に定義
-- サンプル入力は `/Users/suguru.masui/wandb_agent_hackathon/samples/resume_inputs.yml` に定義
+- ドメイン定義は `prompts/resume_summary.yml` に定義
+- サンプル入力は `samples/resume_inputs.yml` に定義
 - サーバー起動中は読み込み結果をメモリキャッシュ
 - `judge.instruction_template` 内の `{{RUBRIC_BULLETS}}` を `judge.rubric` から展開
 
