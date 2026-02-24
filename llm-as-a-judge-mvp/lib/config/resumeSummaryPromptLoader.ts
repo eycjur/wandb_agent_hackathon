@@ -1,10 +1,12 @@
 import "server-only";
 
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { parse } from "yaml";
 import { z } from "zod";
 import { AppError } from "@/lib/errors";
+
+// ビルド時にバンドル（Vercel等サーバーレスでreadFileが失敗するため）
+import promptYaml from "@/prompts/resume_summary.yml";
+import sampleYaml from "@/samples/resume_inputs.yml";
 
 const SampleSchema = z.object({
   title: z.string().min(1),
@@ -49,29 +51,15 @@ export async function getResumeSummaryPromptConfig(): Promise<ResumeSummaryPromp
     return cachedPrompt;
   }
 
-  const promptPath = path.join(process.cwd(), "prompts", "resume_summary.yml");
-
-  let fileText: string;
-  try {
-    fileText = await readFile(promptPath, "utf8");
-  } catch {
-    throw new AppError(
-      500,
-      "CONFIG_ERROR",
-      "ドメインプロンプト定義ファイルの読み込みに失敗しました。",
-      `Failed to read prompt file: ${promptPath}`
-    );
-  }
-
   let parsedYaml: unknown;
   try {
-    parsedYaml = parse(fileText);
+    parsedYaml = parse(promptYaml);
   } catch {
     throw new AppError(
       500,
       "CONFIG_ERROR",
       "ドメインプロンプト定義ファイルの解析に失敗しました。",
-      `Failed to parse prompt file: ${promptPath}`
+      "Failed to parse prompt file"
     );
   }
 
@@ -89,35 +77,19 @@ export async function getResumeSummaryPromptConfig(): Promise<ResumeSummaryPromp
     .map((item) => `- ${item}`)
     .join("\n");
 
-  const samplePath = path.isAbsolute(validation.data.samples_path)
-    ? validation.data.samples_path
-    : path.join(process.cwd(), validation.data.samples_path);
-
-  let sampleText: string;
+  let parsedSample: unknown;
   try {
-    sampleText = await readFile(samplePath, "utf8");
-  } catch {
-    throw new AppError(
-      500,
-      "CONFIG_ERROR",
-      "サンプル入力ファイルの読み込みに失敗しました。",
-      `Failed to read sample file: ${samplePath}`
-    );
-  }
-
-  let sampleYaml: unknown;
-  try {
-    sampleYaml = parse(sampleText);
+    parsedSample = parse(sampleYaml);
   } catch {
     throw new AppError(
       500,
       "CONFIG_ERROR",
       "サンプル入力ファイルの解析に失敗しました。",
-      `Failed to parse sample file: ${samplePath}`
+      "Failed to parse sample file"
     );
   }
 
-  const sampleValidation = SampleFileSchema.safeParse(sampleYaml);
+  const sampleValidation = SampleFileSchema.safeParse(parsedSample);
   if (!sampleValidation.success) {
     throw new AppError(
       500,
