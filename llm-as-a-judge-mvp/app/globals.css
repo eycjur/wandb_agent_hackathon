@@ -1,0 +1,860 @@
+/* ── Design Tokens ─────────────────────────────── */
+:root {
+  color-scheme: dark;
+
+  /* Background */
+  --bg-base: #0b1120;
+  --bg-surface: #111b2e;
+  --bg-elevated: #1a2740;
+  --bg-input: #0f1829;
+
+  /* Accent */
+  --accent-cyan: #00d4aa;
+  --accent-purple: #7c5cfc;
+  --accent-blue: #3b82f6;
+  --accent-gradient: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+
+  /* Text */
+  --text-primary: #e4eaf1;
+  --text-secondary: #7e909e;
+  --text-muted: #4d6070;
+
+  /* Semantic */
+  --ok: #22c968;
+  --warn: #f04d4d;
+  --focus: #5b8dfa;
+
+  /* Borders / Surfaces */
+  --border: rgba(255, 255, 255, 0.07);
+  --border-focus: rgba(0, 212, 170, 0.55);
+  --glass: rgba(255, 255, 255, 0.03);
+  --glass-strong: rgba(255, 255, 255, 0.06);
+
+  /* Shadow / Glow */
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --glow-cyan: 0 0 20px rgba(0, 212, 170, 0.25);
+  --glow-purple: 0 0 20px rgba(124, 92, 252, 0.2);
+  --glow-button: 0 4px 24px rgba(0, 212, 170, 0.3), 0 0 60px rgba(124, 92, 252, 0.12);
+
+  /* Radius */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+}
+
+/* ── Reset & Base ─────────────────────────────── */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text-primary);
+  background: var(--bg-base);
+  background-image:
+    radial-gradient(ellipse 60% 50% at 15% 10%, rgba(124, 92, 252, 0.12), transparent),
+    radial-gradient(ellipse 50% 40% at 85% 15%, rgba(0, 212, 170, 0.08), transparent),
+    radial-gradient(ellipse 70% 60% at 50% 95%, rgba(59, 130, 246, 0.06), transparent);
+  font-family: "Inter", "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Shell / Layout ───────────────────────────── */
+.shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 20px 56px;
+  display: grid;
+  gap: 20px;
+}
+
+/* ── Hero ──────────────────────────────────────── */
+.hero {
+  padding: 8px 4px 4px;
+}
+
+.kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+}
+
+.hero h1 {
+  margin: 8px 0 4px;
+  font-size: clamp(2rem, 3.4vw, 3rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: #fff;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+/* ── Tabs ──────────────────────────────────────── */
+.mainTabs {
+  display: inline-flex;
+  gap: 0;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+}
+
+.tabButton {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 10px 20px;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s ease;
+}
+
+.tabButton::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: transparent;
+  border-radius: 2px 2px 0 0;
+  transition: background 0.25s ease;
+}
+
+.tabButton:hover {
+  color: var(--text-primary);
+}
+
+.tabButton.active {
+  color: var(--accent-cyan);
+}
+
+.tabButton.active::after {
+  background: var(--accent-gradient);
+}
+
+.tabPanel {
+  display: block;
+  animation: panelFadeIn 0.3s ease;
+}
+
+@keyframes panelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Workspace Grid ───────────────────────────── */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) minmax(340px, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.rightColumn {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+/* ── Panel (glassmorphism) ────────────────────── */
+.panel {
+  border: 1px solid var(--border);
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-lg);
+  transition: border-color 0.2s ease;
+}
+
+.panel:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Headings ─────────────────────────────────── */
+.compose h2,
+.progressPanel h2,
+.resultCard h2 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+/* ── Form Elements ────────────────────────────── */
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  line-height: 1.6;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: var(--glow-cyan);
+}
+
+textarea[aria-invalid="true"] {
+  border-color: var(--warn);
+  box-shadow: 0 0 0 3px rgba(240, 77, 77, 0.15);
+}
+
+.hintText {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+/* ── Sample Buttons ───────────────────────────── */
+.sampleRow {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sampleButton {
+  border: 1px solid var(--border);
+  background: var(--glass-strong);
+  color: var(--text-secondary);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.sampleButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.sampleButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Counter Row ──────────────────────────────── */
+.counterRow {
+  margin-top: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.inputActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.counter {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Input / Error ───────────────────────────── */
+.inputError {
+  margin: 8px 0 0;
+  min-height: 22px;
+  color: var(--warn);
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.inputErrorPlaceholder {
+  margin: 8px 0 0;
+  min-height: 22px;
+}
+
+/* ── Buttons ──────────────────────────────────── */
+.primaryButton,
+.subtleButton {
+  border: 0;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+  transition: transform 0.15s ease, opacity 0.15s ease, box-shadow 0.25s ease, background 0.2s ease;
+}
+
+.primaryButton {
+  background: var(--accent-gradient);
+  color: #0b1120;
+  font-weight: 800;
+  padding: 11px 20px;
+  min-width: 180px;
+  box-shadow: var(--glow-button);
+}
+
+.primaryButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 32px rgba(0, 212, 170, 0.4), 0 0 80px rgba(124, 92, 252, 0.18);
+}
+
+.subtleButton {
+  background: var(--glass-strong);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 9px 14px;
+  font-weight: 600;
+}
+
+.subtleButton:hover {
+  transform: translateY(-1px);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.primaryButton:active,
+.subtleButton:active {
+  transform: translateY(0);
+}
+
+.primaryButton:disabled,
+.subtleButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Focus Rings ──────────────────────────────── */
+.primaryButton:focus-visible,
+.subtleButton:focus-visible,
+.tabButton:focus-visible,
+summary:focus-visible,
+textarea:focus-visible,
+h2:focus-visible,
+.errorBanner:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ── Advanced Details ─────────────────────────── */
+.advanced {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.advanced summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+.advanced dl {
+  margin: 14px 0 10px;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+}
+
+.advanced dt {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.advanced dd {
+  margin: 0;
+  font-weight: 600;
+  word-break: break-all;
+  color: var(--text-secondary);
+}
+
+/* ── Progress Panel ───────────────────────────── */
+.progressPanel ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  gap: 0;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stepItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-align: center;
+  position: relative;
+  flex: 1;
+}
+
+/* Connecting line between steps */
+.stepItem:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: calc(50% + 10px);
+  width: calc(100% - 20px);
+  height: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.step-done:not(:last-child)::after {
+  background: var(--ok);
+  opacity: 0.5;
+}
+
+.step-active:not(:last-child)::after {
+  background: linear-gradient(90deg, var(--accent-blue), var(--border));
+}
+
+.stepDot {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--text-muted);
+  position: relative;
+  z-index: 1;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+
+.step-active {
+  color: var(--accent-blue);
+}
+
+.step-active .stepDot {
+  background: var(--accent-blue);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5), 0 0 24px rgba(59, 130, 246, 0.2);
+  animation: dotPulse 1.6s infinite;
+}
+
+@keyframes dotPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5), 0 0 24px rgba(59, 130, 246, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 14px rgba(59, 130, 246, 0.7), 0 0 36px rgba(59, 130, 246, 0.3);
+  }
+}
+
+.step-done {
+  color: var(--ok);
+}
+
+.step-done .stepDot {
+  background: var(--ok);
+  box-shadow: 0 0 8px rgba(34, 201, 104, 0.4);
+}
+
+.step-failed {
+  color: var(--warn);
+}
+
+.step-failed .stepDot {
+  background: var(--warn);
+  box-shadow: 0 0 8px rgba(240, 77, 77, 0.4);
+}
+
+.statusLine {
+  margin: 16px 0 0;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.88rem;
+  text-align: center;
+}
+
+.errorBanner {
+  margin: 12px 0 0;
+  min-height: 22px;
+  color: var(--warn);
+  font-weight: 600;
+  line-height: 1.5;
+  padding: 10px 14px;
+  background: rgba(240, 77, 77, 0.08);
+  border: 1px solid rgba(240, 77, 77, 0.2);
+  border-radius: var(--radius-sm);
+}
+
+.errorPlaceholder {
+  margin: 12px 0 0;
+  min-height: 22px;
+}
+
+/* ── Evaluate Action ──────────────────────────── */
+.evaluateAction {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-lg);
+}
+
+.evaluateAction .primaryButton {
+  flex-shrink: 0;
+}
+
+.evaluateHint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+/* ── Evaluation View ──────────────────────────── */
+.evaluationView {
+  display: grid;
+  gap: 18px;
+}
+
+.evaluationSplit {
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) minmax(340px, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+/* ── Result Cards ─────────────────────────────── */
+.resultCard {
+  min-height: 240px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.inlineActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+pre {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.92rem;
+}
+
+.previousResult {
+  margin-top: 12px;
+}
+
+.previousResult summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+/* ── Score Card ────────────────────────────────── */
+.scoreBlock {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+
+.scoreLabel {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.scoreValue {
+  margin: 6px 0 0;
+  font-size: 3.2rem;
+  line-height: 1;
+  font-weight: 900;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 18px rgba(0, 212, 170, 0.3));
+}
+
+.scoreDelta {
+  margin: 10px 0 0;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.scoreDelta.up {
+  color: var(--ok);
+}
+
+.scoreDelta.down {
+  color: var(--warn);
+}
+
+.passBadge {
+  margin: 10px 0 0;
+  font-weight: 800;
+  font-size: 0.95rem;
+  display: inline-block;
+  padding: 4px 16px;
+  border-radius: var(--radius-pill);
+}
+
+.passBadge.pass {
+  color: var(--ok);
+  background: rgba(34, 201, 104, 0.1);
+  border: 1px solid rgba(34, 201, 104, 0.25);
+}
+
+.passBadge.fail {
+  color: var(--warn);
+  background: rgba(240, 77, 77, 0.1);
+  border: 1px solid rgba(240, 77, 77, 0.25);
+}
+
+.passBadge.neutral {
+  color: var(--text-muted);
+  background: var(--glass-strong);
+  border: 1px solid var(--border);
+}
+
+.thresholdText {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.scoreGuide {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.scoreGuideTitle {
+  margin: 0 0 8px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.scoreGuide ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+/* ── Skeleton ─────────────────────────────────── */
+.skeletonWrap {
+  display: grid;
+  gap: 10px;
+}
+
+.skeletonLine,
+.skeletonCircle {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 25%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.04) 75%);
+  background-size: 220% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+.skeletonLine {
+  height: 14px;
+  border-radius: 8px;
+}
+
+.skeletonCircle {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-pill);
+  margin: 0 auto;
+}
+
+.w100 {
+  width: 100%;
+}
+
+.w95 {
+  width: 95%;
+}
+
+.w82 {
+  width: 82%;
+}
+
+.w80 {
+  width: 80%;
+}
+
+.w76 {
+  width: 76%;
+}
+
+.w65 {
+  width: 65%;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+/* ── Responsive ───────────────────────────────── */
+@media (max-width: 920px) {
+
+  .workspace,
+  .evaluationSplit {
+    grid-template-columns: 1fr;
+  }
+
+  .shell {
+    padding: 20px 14px 40px;
+  }
+
+  .counterRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .primaryButton {
+    width: 100%;
+  }
+
+  .mainTabs {
+    width: 100%;
+    display: flex;
+  }
+
+  .tabButton {
+    flex: 1;
+    text-align: center;
+  }
+
+  .inputActions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .inputActions .subtleButton {
+    width: 100%;
+  }
+
+  .cardHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inlineActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inlineActions .subtleButton {
+    width: 100%;
+  }
+
+  .sampleRow {
+    flex-direction: column;
+  }
+
+  .sampleButton {
+    width: 100%;
+    text-align: left;
+  }
+
+  .progressPanel ol {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .stepItem {
+    flex-direction: row;
+    text-align: left;
+  }
+
+  .stepItem:not(:last-child)::after {
+    display: none;
+  }
+}

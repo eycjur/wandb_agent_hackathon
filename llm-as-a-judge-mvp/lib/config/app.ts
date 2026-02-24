@@ -1,0 +1,2 @@
+export const MAX_USER_INPUT_CHARS = 4000;
+export const MAX_GENERATED_OUTPUT_CHARS = 12000;
