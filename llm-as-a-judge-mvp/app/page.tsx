@@ -3,8 +3,10 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { MAX_USER_INPUT_CHARS } from "@/lib/config/app";
 import { JUDGE_MODEL, TARGET_MODEL } from "@/lib/config/llm";
+import type { DomainId } from "@/lib/config/domainPromptLoader";
 import type {
   DomainConfigResponse,
+  DomainsListResponse,
   ErrorCode,
   GenerateEvaluateErrorResponse,
   GenerateSuccessResponse,
@@ -25,7 +27,7 @@ type StepState = "pending" | "active" | "done" | "failed";
 type MainTab = "generation" | "evaluation";
 
 type EvaluationResult = {
-  domain: "resume_summary";
+  domain: DomainId;
   rubricVersion: number;
   passThreshold: number;
   pass: boolean;
@@ -41,22 +43,66 @@ const PROGRESS_STEPS: Array<{
   label: string;
 }> = [
     { key: "input_accepted", label: "Input accepted" },
-    { key: "generating", label: "Generating summary" },
-    { key: "generated", label: "Summary generated" },
-    { key: "judging", label: "Judging summary" },
+    { key: "generating", label: "Generating" },
+    { key: "generated", label: "Generated" },
+    { key: "judging", label: "Judging" },
     { key: "done", label: "Completed" }
   ];
 
-const SCORE_GUIDE = [
-  "5: 採用判断に十分使える高品質な要約",
-  "4: 実務利用可能だが軽微な改善余地あり",
-  "3: 要点はあるが情報不足または曖昧さが残る",
-  "2: 採用判断に必要な情報が不足",
-  "1: 重要情報の欠落が大きい",
-  "0: 要約として成立していない"
-] as const;
+const SCORE_GUIDE_BY_DOMAIN: Record<DomainId, readonly string[]> = {
+  resume_summary: [
+    "5: 採用判断に十分使える高品質な要約",
+    "4: 実務利用可能だが軽微な改善余地あり",
+    "3: 要点はあるが情報不足または曖昧さが残る",
+    "2: 採用判断に必要な情報が不足",
+    "1: 重要情報の欠落が大きい",
+    "0: 要約として成立していない"
+  ],
+  resume_detail: [
+    "5: 構造化・数値化が十分で採用判断に使える",
+    "4: 実務利用可能だが軽微な改善余地あり",
+    "3: 一部曖昧な表現や数値不足が残る",
+    "2: 実績の数値化が十分でない",
+    "1: 構造・形式が不十分",
+    "0: 職務経歴として成立していない"
+  ],
+  self_pr: [
+    "5: 採用担当に十分アピールできる高品質な自己PR",
+    "4: 実務利用可能だが軽微な改善余地あり",
+    "3: 根拠や具体性にやや不足",
+    "2: 曖昧な表現が多く説得力が弱い",
+    "1: 専門性が伝わりにくい",
+    "0: 自己PRとして成立していない"
+  ]
+};
+
+const DOMAIN_LABELS: Record<DomainId, string> = {
+  resume_summary: "職務要約",
+  resume_detail: "職務経歴（詳細）",
+  self_pr: "自己PR"
+};
+
+const DOMAIN_GENERATE_LABELS: Record<DomainId, string> = {
+  resume_summary: "要約を生成",
+  resume_detail: "職務経歴を生成",
+  self_pr: "自己PRを生成"
+};
+
+const DOMAIN_JUDGE_LABELS: Record<DomainId, string> = {
+  resume_summary: "要約を評価",
+  resume_detail: "職務経歴を評価",
+  self_pr: "自己PRを評価"
+};
+
+const DOMAIN_OUTPUT_LABELS: Record<DomainId, string> = {
+  resume_summary: "生成された職務経歴要約",
+  resume_detail: "生成された職務経歴（詳細）",
+  self_pr: "生成された自己PR"
+};
 
 export default function HomePage() {
+  const [selectedDomain, setSelectedDomain] = useState<DomainId>("resume_summary");
+  const [domainsList, setDomainsList] = useState<DomainsListResponse["domains"]>([]);
   const [userInput, setUserInput] = useState("");
   const [inputError, setInputError] = useState("");
   const [requestError, setRequestError] = useState("");
@@ -68,7 +114,9 @@ export default function HomePage() {
   const [activeMainTab, setActiveMainTab] = useState<MainTab>("generation");
   const [generatedOutput, setGeneratedOutput] = useState("");
   const [generatedForInput, setGeneratedForInput] = useState("");
+  const [generatedForDomain, setGeneratedForDomain] = useState<DomainId>("resume_summary");
   const [lastGeneratedInput, setLastGeneratedInput] = useState("");
+  const [lastGeneratedDomain, setLastGeneratedDomain] = useState<DomainId>("resume_summary");
   const [currentResult, setCurrentResult] = useState<EvaluationResult | null>(null);
   const [previousResult, setPreviousResult] = useState<EvaluationResult | null>(null);
   const [domainConfig, setDomainConfig] = useState<DomainConfigResponse | null>(null);
@@ -105,12 +153,28 @@ export default function HomePage() {
   }, [requestError]);
 
   useEffect(() => {
+    const loadDomainsList = async () => {
+      try {
+        const res = await fetch("/api/domains", { cache: "no-store" });
+        if (!res.ok) return;
+        const data: unknown = await res.json();
+        if (isDomainsListResponse(data)) {
+          setDomainsList(data.domains);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void loadDomainsList();
+  }, []);
+
+  useEffect(() => {
     const loadDomainConfig = async () => {
       try {
-        const response = await fetch("/api/domain-config", {
-          method: "GET",
-          cache: "no-store"
-        });
+        const response = await fetch(
+          `/api/domain-config?domain=${encodeURIComponent(selectedDomain)}`,
+          { cache: "no-store" }
+        );
         if (!response.ok) {
           return;
         }
@@ -125,9 +189,12 @@ export default function HomePage() {
     };
 
     void loadDomainConfig();
-  }, []);
+  }, [selectedDomain]);
 
-  const runGenerateOnly = async (rawInput: string) => {
+  const runGenerateOnly = async (
+    rawInput: string,
+    domainOverride?: DomainId
+  ) => {
     if (inFlightRef.current) {
       return;
     }
@@ -139,6 +206,7 @@ export default function HomePage() {
       return;
     }
 
+    const domainToUse = domainOverride ?? selectedDomain;
     const normalizedInput = rawInput.trim();
     setInputError("");
     setRequestError("");
@@ -157,7 +225,10 @@ export default function HomePage() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ userInput: normalizedInput })
+        body: JSON.stringify({
+          userInput: normalizedInput,
+          domain: domainToUse
+        })
       });
 
       let generateData: unknown;
@@ -180,7 +251,9 @@ export default function HomePage() {
 
       setGeneratedOutput(generateData.generatedOutput);
       setGeneratedForInput(normalizedInput);
+      setGeneratedForDomain(domainToUse);
       setLastGeneratedInput(normalizedInput);
+      setLastGeneratedDomain(domainToUse);
       if (currentResult) {
         setPreviousResult(currentResult);
       }
@@ -205,7 +278,7 @@ export default function HomePage() {
     }
 
     if (!generatedOutput || !generatedForInput) {
-      setRequestError("先に要約を生成してください。");
+      setRequestError(`先に${DOMAIN_GENERATE_LABELS[selectedDomain]}してください。`);
       setProgressStage("idle");
       return;
     }
@@ -225,7 +298,8 @@ export default function HomePage() {
         },
         body: JSON.stringify({
           userInput: generatedForInput,
-          generatedOutput
+          generatedOutput,
+          domain: generatedForDomain
         })
       });
 
@@ -289,7 +363,8 @@ export default function HomePage() {
     if (!lastGeneratedInput) {
       return;
     }
-    await runGenerateOnly(lastGeneratedInput);
+    setSelectedDomain(lastGeneratedDomain);
+    await runGenerateOnly(lastGeneratedInput, lastGeneratedDomain);
   };
 
   const handleCopy = async () => {
@@ -386,7 +461,14 @@ export default function HomePage() {
       </ol>
 
       <p className="statusLine" aria-live="polite">
-        {buildStatusMessage(progressStage, loading, elapsedSeconds)}
+        {buildStatusMessage(
+          progressStage,
+          loading,
+          elapsedSeconds,
+          DOMAIN_LABELS[generatedForDomain || selectedDomain],
+          DOMAIN_GENERATE_LABELS[selectedDomain],
+          DOMAIN_JUDGE_LABELS[generatedForDomain || selectedDomain]
+        )}
       </p>
 
       {requestError ? (
@@ -405,6 +487,7 @@ export default function HomePage() {
     </section>
   );
 
+  const outputDomain = generatedForDomain || selectedDomain;
   const generationPanel = (
     <article
       className="panel resultCard outputCard"
@@ -412,7 +495,7 @@ export default function HomePage() {
     >
       <div className="cardHeader">
         <h2 ref={resultHeadingRef} tabIndex={-1}>
-          生成された職務経歴要約
+          {DOMAIN_OUTPUT_LABELS[outputDomain]}
         </h2>
         <div className="inlineActions">
           <button
@@ -445,7 +528,7 @@ export default function HomePage() {
       {loading && progressStage === "generating" ? (
         <OutputSkeleton />
       ) : (
-        <pre>{generatedOutput || "まだ生成されていません。"}</pre>
+        <pre>{generatedOutput || `まだ${DOMAIN_LABELS[selectedDomain]}は生成されていません。`}</pre>
       )}
 
       {previousResult ? (
@@ -498,9 +581,11 @@ export default function HomePage() {
       )}
 
       <div className="scoreGuide" aria-label="score rubric guide">
-        <p className="scoreGuideTitle">職務経歴要約 Score Guide</p>
+        <p className="scoreGuideTitle">
+          {DOMAIN_LABELS[outputDomain]} Score Guide
+        </p>
         <ul>
-          {SCORE_GUIDE.map((item) => (
+          {SCORE_GUIDE_BY_DOMAIN[outputDomain].map((item) => (
             <li key={item}>{item}</li>
           ))}
         </ul>
@@ -512,11 +597,31 @@ export default function HomePage() {
     <main className="shell">
       <header className="hero">
         <p className="kicker">Recruiting Assistant</p>
-        <h1>職務経歴要約</h1>
+        <h1>職務経歴書アシスタント</h1>
         <p className="subtitle">
-          職務経歴テキストを採用担当向け要約に変換し、必要に応じて実務利用可能性を評価します。
+          職務経歴テキストから要約・職務経歴詳細・自己PRを生成し、LLMで評価します。
         </p>
       </header>
+
+      {domainsList.length > 0 && (
+        <div className="domainSelector" role="group" aria-label="生成モード選択">
+          <span className="domainSelectorLabel">生成モード:</span>
+          <div className="domainSelectorButtons">
+            {domainsList.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                className={`domainButton ${selectedDomain === d.id ? "active" : ""}`}
+                onClick={() => setSelectedDomain(d.id)}
+                disabled={loading}
+                aria-pressed={selectedDomain === d.id}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mainTabs" role="tablist" aria-label="main view tabs">
         <button
@@ -573,7 +678,7 @@ export default function HomePage() {
                 />
 
                 <p id="input-help" className="hintText">
-                  Shortcut: Ctrl/Cmd + Enter で要約を生成
+                  Shortcut: Ctrl/Cmd + Enter で{DOMAIN_GENERATE_LABELS[selectedDomain]}
                 </p>
 
                 <div className="sampleRow">
@@ -598,7 +703,7 @@ export default function HomePage() {
                     <button className="primaryButton" type="submit" disabled={loading}>
                       {loading && progressStage === "generating"
                         ? "Generating..."
-                        : "要約を生成"}
+                        : DOMAIN_GENERATE_LABELS[selectedDomain]}
                     </button>
                   </div>
                 </div>
@@ -621,8 +726,8 @@ export default function HomePage() {
                   <dd>{TARGET_MODEL}</dd>
                   <dt>Judge Model</dt>
                   <dd>{JUDGE_MODEL}</dd>
-                  <dt>Judge Prompt</dt>
-                  <dd>prompts/resume_summary.yml</dd>
+                  <dt>Domain</dt>
+                  <dd>{selectedDomain}</dd>
                 </dl>
               </details>
             </section>
@@ -648,10 +753,14 @@ export default function HomePage() {
                 onClick={handleJudge}
                 disabled={!canJudge}
               >
-                {loading && progressStage === "judging" ? "Judging..." : "要約を評価"}
+                {loading && progressStage === "judging"
+                  ? "Judging..."
+                  : DOMAIN_JUDGE_LABELS[generatedForDomain]}
               </button>
               {!generatedOutput && (
-                <p className="evaluateHint">先に「生成」タブで要約を生成してください。</p>
+                <p className="evaluateHint">
+                  先に「生成」タブで{DOMAIN_GENERATE_LABELS[selectedDomain]}してください。
+                </p>
               )}
             </div>
             <div className="evaluationSplit">
@@ -689,6 +798,8 @@ function isGenerateSuccessResponse(data: unknown): data is GenerateSuccessRespon
   );
 }
 
+const VALID_DOMAINS = ["resume_summary", "resume_detail", "self_pr"] as const;
+
 function isJudgeSuccessResponse(data: unknown): data is JudgeSuccessResponse {
   if (typeof data !== "object" || data === null) {
     return false;
@@ -701,22 +812,44 @@ function isJudgeSuccessResponse(data: unknown): data is JudgeSuccessResponse {
     "pass" in data &&
     "score" in data &&
     "reason" in data &&
-    data.domain === "resume_summary" &&
-    typeof data.rubricVersion === "number" &&
-    Number.isInteger(data.rubricVersion) &&
-    data.rubricVersion > 0 &&
-    typeof data.passThreshold === "number" &&
-    Number.isInteger(data.passThreshold) &&
-    data.passThreshold >= 0 &&
-    data.passThreshold <= 5 &&
-    typeof data.pass === "boolean" &&
-    typeof data.score === "number" &&
-    Number.isInteger(data.score) &&
-    data.score >= 0 &&
-    data.score <= 5 &&
-    data.pass === (data.score >= data.passThreshold) &&
-    typeof data.reason === "string" &&
-    data.reason.length > 0
+    VALID_DOMAINS.includes((data as JudgeSuccessResponse).domain) &&
+    typeof (data as JudgeSuccessResponse).rubricVersion === "number" &&
+    Number.isInteger((data as JudgeSuccessResponse).rubricVersion) &&
+    (data as JudgeSuccessResponse).rubricVersion > 0 &&
+    typeof (data as JudgeSuccessResponse).passThreshold === "number" &&
+    Number.isInteger((data as JudgeSuccessResponse).passThreshold) &&
+    (data as JudgeSuccessResponse).passThreshold >= 0 &&
+    (data as JudgeSuccessResponse).passThreshold <= 5 &&
+    typeof (data as JudgeSuccessResponse).pass === "boolean" &&
+    typeof (data as JudgeSuccessResponse).score === "number" &&
+    Number.isInteger((data as JudgeSuccessResponse).score) &&
+    (data as JudgeSuccessResponse).score >= 0 &&
+    (data as JudgeSuccessResponse).score <= 5 &&
+    (data as JudgeSuccessResponse).pass ===
+      ((data as JudgeSuccessResponse).score >=
+        (data as JudgeSuccessResponse).passThreshold) &&
+    typeof (data as JudgeSuccessResponse).reason === "string" &&
+    (data as JudgeSuccessResponse).reason.length > 0
+  );
+}
+
+function isDomainsListResponse(
+  data: unknown
+): data is DomainsListResponse {
+  if (typeof data !== "object" || data === null || !("domains" in data)) {
+    return false;
+  }
+  const domains = (data as DomainsListResponse).domains;
+  return (
+    Array.isArray(domains) &&
+    domains.every(
+      (d) =>
+        typeof d === "object" &&
+        d !== null &&
+        "id" in d &&
+        "label" in d &&
+        VALID_DOMAINS.includes(d.id as (typeof VALID_DOMAINS)[number])
+    )
   );
 }
 
@@ -743,25 +876,26 @@ function isDomainConfigResponse(data: unknown): data is DomainConfigResponse {
     return false;
   }
 
+  const d = data as DomainConfigResponse;
   if (
     !("domain" in data) ||
-    data.domain !== "resume_summary" ||
+    !VALID_DOMAINS.includes(d.domain) ||
     !("rubricVersion" in data) ||
-    typeof data.rubricVersion !== "number" ||
-    !Number.isInteger(data.rubricVersion) ||
-    data.rubricVersion <= 0 ||
+    typeof d.rubricVersion !== "number" ||
+    !Number.isInteger(d.rubricVersion) ||
+    d.rubricVersion <= 0 ||
     !("passThreshold" in data) ||
-    typeof data.passThreshold !== "number" ||
-    !Number.isInteger(data.passThreshold) ||
-    data.passThreshold < 0 ||
-    data.passThreshold > 5 ||
+    typeof d.passThreshold !== "number" ||
+    !Number.isInteger(d.passThreshold) ||
+    d.passThreshold < 0 ||
+    d.passThreshold > 5 ||
     !("samples" in data) ||
-    !Array.isArray(data.samples)
+    !Array.isArray(d.samples)
   ) {
     return false;
   }
 
-  return data.samples.every(
+  return d.samples.every(
     (sample) =>
       typeof sample === "object" &&
       sample !== null &&
@@ -838,37 +972,40 @@ function getStepState(stage: ProgressStage, stepIndex: number): StepState {
 function buildStatusMessage(
   stage: ProgressStage,
   loading: boolean,
-  elapsedSeconds: number
+  elapsedSeconds: number,
+  domainLabel: string,
+  generateLabel: string,
+  judgeLabel: string
 ): string {
   if (loading && stage === "generating") {
-    return `職務経歴要約を生成中です（${elapsedSeconds}秒経過）`;
+    return `${domainLabel}を生成中です（${elapsedSeconds}秒経過）`;
   }
 
   if (loading && stage === "judging") {
-    return `要約を評価中です（${elapsedSeconds}秒経過）`;
+    return `${domainLabel}を評価中です（${elapsedSeconds}秒経過）`;
   }
 
   if (stage === "generated") {
-    return "要約が完了しました。「要約を評価」を押して評価を実行してください。";
+    return `${domainLabel}が完了しました。「${judgeLabel}」を押して評価を実行してください。`;
   }
 
   if (stage === "done") {
-    return "要約と評価が完了しました。結果を確認してください。";
+    return `${domainLabel}と評価が完了しました。結果を確認してください。`;
   }
 
   if (stage === "failed_generating") {
-    return "要約生成に失敗しました。エラー内容を確認してください。";
+    return `${domainLabel}の生成に失敗しました。エラー内容を確認してください。`;
   }
 
   if (stage === "failed_judging") {
-    return "要約の評価に失敗しました。エラー内容を確認してください。";
+    return `${domainLabel}の評価に失敗しました。エラー内容を確認してください。`;
   }
 
   if (stage === "input_accepted") {
     return "職務経歴入力を受け付けました。";
   }
 
-  return "職務経歴入力後に「要約を生成」を押してください。";
+  return `職務経歴入力後に「${generateLabel}」を押してください。`;
 }
 
 function OutputSkeleton() {
