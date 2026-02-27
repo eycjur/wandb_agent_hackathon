@@ -104,6 +104,66 @@ body {
   font-size: 0.95rem;
 }
 
+/* ── Domain Selector ──────────────────────────── */
+.domainSelector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.domainSelectorLabel {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.domainSelectorButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.domainButton {
+  border: 1px solid var(--border);
+  background: var(--glass-strong);
+  color: var(--text-secondary);
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.domainButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.domainButton.active {
+  background: rgba(0, 212, 170, 0.12);
+  color: var(--accent-cyan);
+  border-color: rgba(0, 212, 170, 0.35);
+}
+
+.domainButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.domainButton:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
 /* ── Tabs ──────────────────────────────────────── */
 .mainTabs {
   display: inline-flex;

@@ -10,8 +10,8 @@ function createProvider(score: number, passThreshold: number): LLMProvider {
       judge: "judge"
     },
     generateOutput: vi.fn(async () => "generated summary"),
-    judgeOutput: vi.fn(async () => ({
-      domain: "resume_summary",
+    judgeOutput: vi.fn(async (_userInput, _generatedOutput, domain) => ({
+      domain: domain ?? "resume_summary",
       rubricVersion: 1,
       passThreshold,
       score,
