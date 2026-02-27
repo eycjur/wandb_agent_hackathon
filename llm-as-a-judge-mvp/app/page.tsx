@@ -4,6 +4,13 @@ import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { MAX_USER_INPUT_CHARS } from "@/lib/config/app";
 import { JUDGE_MODEL, TARGET_MODEL } from "@/lib/config/llm";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
+import {
+  createInitialDomainSessions,
+  patchDomainSession,
+  selectDomainSession,
+  type DomainSessionState,
+  type ProgressStage
+} from "@/lib/ui/domainSession";
 import type {
   DomainConfigResponse,
   DomainsListResponse,
@@ -12,16 +19,6 @@ import type {
   GenerateSuccessResponse,
   JudgeSuccessResponse
 } from "@/lib/contracts/generateEvaluate";
-
-type ProgressStage =
-  | "idle"
-  | "input_accepted"
-  | "generating"
-  | "generated"
-  | "judging"
-  | "done"
-  | "failed_generating"
-  | "failed_judging";
 
 type StepState = "pending" | "active" | "done" | "failed";
 type MainTab = "generation" | "evaluation";
@@ -116,10 +113,12 @@ export default function HomePage() {
   const [generatedForInput, setGeneratedForInput] = useState("");
   const [generatedForDomain, setGeneratedForDomain] = useState<DomainId>("resume_summary");
   const [lastGeneratedInput, setLastGeneratedInput] = useState("");
-  const [lastGeneratedDomain, setLastGeneratedDomain] = useState<DomainId>("resume_summary");
   const [currentResult, setCurrentResult] = useState<EvaluationResult | null>(null);
   const [previousResult, setPreviousResult] = useState<EvaluationResult | null>(null);
   const [domainConfig, setDomainConfig] = useState<DomainConfigResponse | null>(null);
+  const [domainSessions, setDomainSessions] = useState<
+    Record<DomainId, DomainSessionState<EvaluationResult>>
+  >(() => createInitialDomainSessions<EvaluationResult>());
 
   const resultHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const requestErrorRef = useRef<HTMLParagraphElement | null>(null);
@@ -191,6 +190,28 @@ export default function HomePage() {
     void loadDomainConfig();
   }, [selectedDomain]);
 
+  const applyDomainSession = (domain: DomainId) => {
+    const session = selectDomainSession(domainSessions, domain);
+    setGeneratedOutput(session.generatedOutput);
+    setGeneratedForInput(session.generatedForInput);
+    setGeneratedForDomain(domain);
+    setLastGeneratedInput(session.lastGeneratedInput);
+    setCurrentResult(session.currentResult);
+    setPreviousResult(session.previousResult);
+    setProgressStage(session.progressStage);
+    setRequestError(session.requestError);
+    setCopyLabel("Copy output");
+    setDownloadLabel("Download .txt");
+  };
+
+  const handleDomainSelect = (domain: DomainId) => {
+    if (domain === selectedDomain) {
+      return;
+    }
+    setSelectedDomain(domain);
+    applyDomainSession(domain);
+  };
+
   const runGenerateOnly = async (
     rawInput: string,
     domainOverride?: DomainId
@@ -215,11 +236,24 @@ export default function HomePage() {
     setCopyLabel("Copy output");
     setDownloadLabel("Download .txt");
     setActiveMainTab("generation");
+    setGeneratedForDomain(domainToUse);
     setProgressStage("input_accepted");
+    setDomainSessions((prev) =>
+      patchDomainSession(prev, domainToUse, {
+        progressStage: "input_accepted",
+        requestError: ""
+      })
+    );
     inFlightRef.current = true;
 
     try {
       setProgressStage("generating");
+      setDomainSessions((prev) =>
+        patchDomainSession(prev, domainToUse, {
+          progressStage: "generating",
+          requestError: ""
+        })
+      );
       const generateResponse = await fetch("/api/generate", {
         method: "POST",
         headers: {
@@ -249,16 +283,28 @@ export default function HomePage() {
         throw new Error("サーバー応答形式が不正です。");
       }
 
+      const previousForDomain =
+        domainSessions[domainToUse].currentResult ?? domainSessions[domainToUse].previousResult;
       setGeneratedOutput(generateData.generatedOutput);
       setGeneratedForInput(normalizedInput);
       setGeneratedForDomain(domainToUse);
       setLastGeneratedInput(normalizedInput);
-      setLastGeneratedDomain(domainToUse);
-      if (currentResult) {
-        setPreviousResult(currentResult);
-      }
+      setPreviousResult(previousForDomain);
       setCurrentResult(null);
       setProgressStage("generated");
+      setDomainSessions((prev) => {
+        const previousResultForDomain =
+          prev[domainToUse].currentResult ?? prev[domainToUse].previousResult;
+        return patchDomainSession(prev, domainToUse, {
+          generatedOutput: generateData.generatedOutput,
+          generatedForInput: normalizedInput,
+          lastGeneratedInput: normalizedInput,
+          currentResult: null,
+          previousResult: previousResultForDomain,
+          progressStage: "generated",
+          requestError: ""
+        });
+      });
     } catch (submitError) {
       const message =
         submitError instanceof Error
@@ -266,6 +312,12 @@ export default function HomePage() {
           : "不明なエラーが発生しました。";
       setRequestError(message);
       setProgressStage("failed_generating");
+      setDomainSessions((prev) =>
+        patchDomainSession(prev, domainToUse, {
+          progressStage: "failed_generating",
+          requestError: message
+        })
+      );
     } finally {
       inFlightRef.current = false;
       setLoading(false);
@@ -278,16 +330,31 @@ export default function HomePage() {
     }
 
     if (!generatedOutput || !generatedForInput) {
-      setRequestError(`先に${DOMAIN_GENERATE_LABELS[selectedDomain]}してください。`);
+      const message = `先に${DOMAIN_GENERATE_LABELS[selectedDomain]}してください。`;
+      setRequestError(message);
       setProgressStage("idle");
+      setDomainSessions((prev) =>
+        patchDomainSession(prev, selectedDomain, {
+          progressStage: "idle",
+          requestError: message
+        })
+      );
       return;
     }
 
+    const domainToJudge = selectedDomain;
+    setGeneratedForDomain(domainToJudge);
     setRequestError("");
     setLoading(true);
     setElapsedMs(0);
     setActiveMainTab("evaluation");
     setProgressStage("judging");
+    setDomainSessions((prev) =>
+      patchDomainSession(prev, domainToJudge, {
+        progressStage: "judging",
+        requestError: ""
+      })
+    );
     inFlightRef.current = true;
 
     try {
@@ -299,7 +366,7 @@ export default function HomePage() {
         body: JSON.stringify({
           userInput: generatedForInput,
           generatedOutput,
-          domain: generatedForDomain
+          domain: domainToJudge
         })
       });
 
@@ -333,10 +400,22 @@ export default function HomePage() {
         createdAt: new Date().toISOString()
       };
 
-      setPreviousResult(currentResult ?? previousResult);
+      const previousForDomain =
+        domainSessions[domainToJudge].currentResult ?? domainSessions[domainToJudge].previousResult;
+      setPreviousResult(previousForDomain);
       setCurrentResult(nextResult);
       setActiveMainTab("evaluation");
       setProgressStage("done");
+      setDomainSessions((prev) => {
+        const previousResultForDomain =
+          prev[domainToJudge].currentResult ?? prev[domainToJudge].previousResult;
+        return patchDomainSession(prev, domainToJudge, {
+          previousResult: previousResultForDomain,
+          currentResult: nextResult,
+          progressStage: "done",
+          requestError: ""
+        });
+      });
     } catch (submitError) {
       const message =
         submitError instanceof Error
@@ -344,6 +423,12 @@ export default function HomePage() {
           : "不明なエラーが発生しました。";
       setRequestError(message);
       setProgressStage("failed_judging");
+      setDomainSessions((prev) =>
+        patchDomainSession(prev, domainToJudge, {
+          progressStage: "failed_judging",
+          requestError: message
+        })
+      );
     } finally {
       inFlightRef.current = false;
       setLoading(false);
@@ -363,8 +448,7 @@ export default function HomePage() {
     if (!lastGeneratedInput) {
       return;
     }
-    setSelectedDomain(lastGeneratedDomain);
-    await runGenerateOnly(lastGeneratedInput, lastGeneratedDomain);
+    await runGenerateOnly(lastGeneratedInput, selectedDomain);
   };
 
   const handleCopy = async () => {
@@ -388,15 +472,15 @@ export default function HomePage() {
     const timestamp = currentResult?.createdAt ?? new Date().toISOString();
     const usedInput = generatedForInput || userInput.trim();
     const lines = [
-      "# Resume Summary Evaluation Result",
+      "# Resume Generation Evaluation Result",
       `Timestamp: ${timestamp}`,
-      `Domain: ${currentResult?.domain ?? "resume_summary"}`,
+      `Domain: ${currentResult?.domain ?? selectedDomain}`,
       `Rubric Version: ${currentResult?.rubricVersion ?? (domainConfig?.rubricVersion ?? 1)}`,
       "",
       "## Resume Input",
       usedInput,
       "",
-      "## Generated Resume Summary",
+      "## Generated Output",
       generatedOutput,
       "",
       "## Judge"
@@ -419,7 +503,7 @@ export default function HomePage() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `resume-summary-eval-${Date.now()}.txt`;
+    anchor.download = `resume-generation-eval-${Date.now()}.txt`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -465,9 +549,9 @@ export default function HomePage() {
           progressStage,
           loading,
           elapsedSeconds,
-          DOMAIN_LABELS[generatedForDomain || selectedDomain],
+          DOMAIN_LABELS[generatedForDomain],
           DOMAIN_GENERATE_LABELS[selectedDomain],
-          DOMAIN_JUDGE_LABELS[generatedForDomain || selectedDomain]
+          DOMAIN_JUDGE_LABELS[generatedForDomain]
         )}
       </p>
 
@@ -487,7 +571,7 @@ export default function HomePage() {
     </section>
   );
 
-  const outputDomain = generatedForDomain || selectedDomain;
+  const outputDomain = selectedDomain;
   const generationPanel = (
     <article
       className="panel resultCard outputCard"
@@ -533,7 +617,7 @@ export default function HomePage() {
 
       {previousResult ? (
         <details className="previousResult">
-          <summary>前回の要約を表示</summary>
+          <summary>前回の生成結果を表示</summary>
           <pre>{previousResult.generatedOutput}</pre>
         </details>
       ) : null}
@@ -569,7 +653,7 @@ export default function HomePage() {
               {currentResult ? currentResult.passThreshold : (domainConfig?.passThreshold ?? 4)}
             </p>
             <p className="thresholdText">
-              Domain: {currentResult?.domain ?? "resume_summary"} / Rubric v
+              Domain: {currentResult?.domain ?? outputDomain} / Rubric v
               {currentResult?.rubricVersion ?? (domainConfig?.rubricVersion ?? 1)}
             </p>
           </div>
@@ -612,7 +696,7 @@ export default function HomePage() {
                 key={d.id}
                 type="button"
                 className={`domainButton ${selectedDomain === d.id ? "active" : ""}`}
-                onClick={() => setSelectedDomain(d.id)}
+                onClick={() => handleDomainSelect(d.id)}
                 disabled={loading}
                 aria-pressed={selectedDomain === d.id}
               >
