@@ -1,7 +1,6 @@
 import path from "node:path";
-import { defineConfig } from "vitest/config";
 
-export default defineConfig({
+const config = {
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"]
@@ -12,4 +11,6 @@ export default defineConfig({
       "server-only": path.resolve(__dirname, "tests/mocks/server-only.ts")
     }
   }
-});
+};
+
+export default config;
