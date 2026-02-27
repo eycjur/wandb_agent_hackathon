@@ -1,10 +1,14 @@
 import "server-only";
 
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { parse } from "yaml";
 import { z } from "zod";
 import { AppError } from "@/lib/errors";
+
+// ビルド時にバンドル（Vercel等サーバーレスでreadFileが失敗するため）
+import resumeSummaryYaml from "@/prompts/resume_summary.yml";
+import resumeDetailYaml from "@/prompts/resume_detail.yml";
+import selfPrYaml from "@/prompts/self_pr.yml";
+import sampleYaml from "@/samples/resume_inputs.yml";
 
 export type DomainId = "resume_summary" | "resume_detail" | "self_pr";
 
@@ -44,10 +48,10 @@ export type DomainPromptConfig = {
   }>;
 };
 
-const DOMAIN_FILE_MAP: Record<DomainId, string> = {
-  resume_summary: "resume_summary.yml",
-  resume_detail: "resume_detail.yml",
-  self_pr: "self_pr.yml"
+const PROMPT_YAML_MAP: Record<DomainId, string> = {
+  resume_summary: resumeSummaryYaml,
+  resume_detail: resumeDetailYaml,
+  self_pr: selfPrYaml
 };
 
 const cache = new Map<DomainId, DomainPromptConfig>();
@@ -60,30 +64,17 @@ export async function getDomainPromptConfig(
     return cached;
   }
 
-  const fileName = DOMAIN_FILE_MAP[domain];
-  const promptPath = path.join(process.cwd(), "prompts", fileName);
-
-  let fileText: string;
-  try {
-    fileText = await readFile(promptPath, "utf8");
-  } catch {
-    throw new AppError(
-      500,
-      "CONFIG_ERROR",
-      "ドメインプロンプト定義ファイルの読み込みに失敗しました。",
-      `Failed to read prompt file: ${promptPath}`
-    );
-  }
+  const promptYaml = PROMPT_YAML_MAP[domain];
 
   let parsedYaml: unknown;
   try {
-    parsedYaml = parse(fileText);
+    parsedYaml = parse(promptYaml);
   } catch {
     throw new AppError(
       500,
       "CONFIG_ERROR",
       "ドメインプロンプト定義ファイルの解析に失敗しました。",
-      `Failed to parse prompt file: ${promptPath}`
+      `Failed to parse prompt file for domain: ${domain}`
     );
   }
 
@@ -110,35 +101,19 @@ export async function getDomainPromptConfig(
     .map((item) => `- ${item}`)
     .join("\n");
 
-  const samplePath = path.isAbsolute(validation.data.samples_path)
-    ? validation.data.samples_path
-    : path.join(process.cwd(), validation.data.samples_path);
-
-  let sampleText: string;
+  let parsedSample: unknown;
   try {
-    sampleText = await readFile(samplePath, "utf8");
-  } catch {
-    throw new AppError(
-      500,
-      "CONFIG_ERROR",
-      "サンプル入力ファイルの読み込みに失敗しました。",
-      `Failed to read sample file: ${samplePath}`
-    );
-  }
-
-  let sampleYaml: unknown;
-  try {
-    sampleYaml = parse(sampleText);
+    parsedSample = parse(sampleYaml);
   } catch {
     throw new AppError(
       500,
       "CONFIG_ERROR",
       "サンプル入力ファイルの解析に失敗しました。",
-      `Failed to parse sample file: ${samplePath}`
+      "Failed to parse sample file"
     );
   }
 
-  const sampleValidation = SampleFileSchema.safeParse(sampleYaml);
+  const sampleValidation = SampleFileSchema.safeParse(parsedSample);
   if (!sampleValidation.success) {
     throw new AppError(
       500,

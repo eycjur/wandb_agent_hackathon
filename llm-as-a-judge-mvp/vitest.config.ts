@@ -1,6 +1,7 @@
 import path from "node:path";
+import { defineConfig } from "vitest/config";
 
-const config = {
+export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"]
@@ -10,7 +11,15 @@ const config = {
       "@": path.resolve(__dirname, "."),
       "server-only": path.resolve(__dirname, "tests/mocks/server-only.ts")
     }
-  }
-};
-
-export default config;
+  },
+  plugins: [
+    {
+      name: "yaml-raw",
+      transform(code, id) {
+        if (id.endsWith(".yml") || id.endsWith(".yaml")) {
+          return { code: `export default ${JSON.stringify(code)}`, map: null };
+        }
+      }
+    }
+  ]
+});
