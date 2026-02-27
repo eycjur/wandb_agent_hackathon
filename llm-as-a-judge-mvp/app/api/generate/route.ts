@@ -43,7 +43,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const provider = getLLMProvider();
-    const generatedOutput = await provider.generateOutput(parsedRequest.data.userInput);
+    const generatedOutput = await provider.generateOutput(
+      parsedRequest.data.userInput,
+      parsedRequest.data.domain
+    );
     const response = GenerateSuccessResponseSchema.parse({
       generatedOutput
     });

@@ -1,11 +1,24 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { AppError } from "@/lib/errors";
-import { getResumeSummaryPromptConfig } from "@/lib/config/resumeSummaryPromptLoader";
-import { DomainConfigResponseSchema } from "@/lib/contracts/generateEvaluate";
+import {
+  getDomainPromptConfig
+} from "@/lib/config/domainPromptLoader";
+import type { DomainId } from "@/lib/config/domainPromptLoader";
+import {
+  DomainConfigResponseSchema,
+  DomainIdSchema
+} from "@/lib/contracts/generateEvaluate";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const domainParam = searchParams.get("domain") ?? "resume_summary";
+  const domainResult = DomainIdSchema.safeParse(domainParam);
+  const domain: DomainId = domainResult.success
+    ? domainResult.data
+    : "resume_summary";
+
   try {
-    const config = await getResumeSummaryPromptConfig();
+    const config = await getDomainPromptConfig(domain);
 
     const response = DomainConfigResponseSchema.parse({
       domain: config.domain,

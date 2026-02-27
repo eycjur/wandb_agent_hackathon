@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AppError } from "@/lib/errors";
-import { getResumeSummaryPromptConfig } from "@/lib/config/resumeSummaryPromptLoader";
+import { getDomainPromptConfig } from "@/lib/config/domainPromptLoader";
+import type { DomainId } from "@/lib/config/domainPromptLoader";
 import { JUDGE_MODEL, MODEL_TIMEOUT_MS, TARGET_MODEL } from "@/lib/config/llm";
 import { JudgeResult, LLMProvider } from "@/lib/domain/llm";
 
@@ -62,9 +63,9 @@ export class GeminiProvider implements LLMProvider {
     }
   }
 
-  async generateOutput(userInput: string): Promise<string> {
+  async generateOutput(userInput: string, domain: DomainId): Promise<string> {
     const ai = this.getClient();
-    const promptConfig = await getResumeSummaryPromptConfig();
+    const promptConfig = await getDomainPromptConfig(domain);
     const generationPrompt = [
       promptConfig.targetInstruction,
       "",
@@ -113,10 +114,11 @@ export class GeminiProvider implements LLMProvider {
 
   async judgeOutput(
     userInput: string,
-    generatedOutput: string
+    generatedOutput: string,
+    domain: DomainId
   ): Promise<JudgeResult> {
     const ai = this.getClient();
-    const promptConfig = await getResumeSummaryPromptConfig();
+    const promptConfig = await getDomainPromptConfig(domain);
 
     const evaluationPrompt = [
       promptConfig.judgeInstruction,

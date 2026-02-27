@@ -1,13 +1,15 @@
+import type { DomainId } from "@/lib/config/domainPromptLoader";
+
 export type JudgeResult = {
   score: number;
   reason: string;
   rubricVersion: number;
   passThreshold: number;
-  domain: "resume_summary";
+  domain: DomainId;
 };
 
 export type GenerateEvaluateResult = {
-  domain: "resume_summary";
+  domain: DomainId;
   rubricVersion: number;
   passThreshold: number;
   pass: boolean;
@@ -22,6 +24,10 @@ export interface LLMProvider {
     target: string;
     judge: string;
   };
-  generateOutput(userInput: string): Promise<string>;
-  judgeOutput(userInput: string, generatedOutput: string): Promise<JudgeResult>;
+  generateOutput(userInput: string, domain: DomainId): Promise<string>;
+  judgeOutput(
+    userInput: string,
+    generatedOutput: string,
+    domain: DomainId
+  ): Promise<JudgeResult>;
 }

@@ -45,7 +45,8 @@ export async function POST(request: NextRequest) {
     const provider = getLLMProvider();
     const judgeResult = await provider.judgeOutput(
       parsedRequest.data.userInput,
-      parsedRequest.data.generatedOutput
+      parsedRequest.data.generatedOutput,
+      parsedRequest.data.domain
     );
 
     const response = JudgeSuccessResponseSchema.parse({

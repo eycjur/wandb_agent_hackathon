@@ -44,7 +44,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await useCase.execute(parsedRequest.data.userInput);
+    const result = await useCase.execute(
+      parsedRequest.data.userInput,
+      parsedRequest.data.domain
+    );
     const response = GenerateEvaluateSuccessResponseSchema.parse(result);
 
     return NextResponse.json(response, {
