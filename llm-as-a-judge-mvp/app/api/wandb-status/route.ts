@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   WandbStatusResponseSchema,
   WandbDashboardResponseSchema
@@ -8,7 +8,7 @@ import {
   getWeaveDashboardUrl
 } from "@/lib/infrastructure/weave/weaveLogger";
 
-export async function GET() {
+export async function GET(_request: NextRequest) {
   const configured = isWeaveConfigured();
   const dashboardUrl = getWeaveDashboardUrl();
   const response = WandbStatusResponseSchema.parse({ configured });
