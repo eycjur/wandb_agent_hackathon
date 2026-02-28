@@ -50,7 +50,7 @@ export async function optimizeTargetPromptWithGEPA(
     "以下が [職務経歴入力] です。"
   ].join("\n");
 
-  const generatorProgram = ax("userInput:string -> output:string", {
+  const generatorProgram = ax("userInput:string -> generatedOutput:string", {
     description: targetDescription
   });
 
@@ -83,7 +83,7 @@ export async function optimizeTargetPromptWithGEPA(
   });
 
   const metricFn = async (arg: Readonly<{ prediction: unknown; example: unknown }>): Promise<number> => {
-    const output = (arg.prediction as { output?: string })?.output?.trim();
+    const output = (arg.prediction as { generatedOutput?: string })?.generatedOutput?.trim();
     if (!output) return 0;
 
     const ex = arg.example as { userInput?: string; passThreshold?: number };

@@ -99,7 +99,7 @@ export class AxProvider implements LLMProvider {
         ...promptConfig.samples.slice(0, 2).map((s) => `【${s.title}】\n${s.input}`)
       );
     }
-    const generator = ax("userInput:string -> output:string", {
+    const generator = ax("userInput:string -> generatedOutput:string", {
       description: descriptionParts.join("\n")
     });
 
@@ -109,7 +109,7 @@ export class AxProvider implements LLMProvider {
         MODEL_TIMEOUT_MS,
         "生成処理がタイムアウトしました。"
       );
-      const text = result.output?.trim();
+      const text = result.generatedOutput?.trim();
       if (!text) {
         throw new AppError(
           502,
