@@ -1,60 +1,143 @@
 # 職務経歴書アシスタント MVP (Gemini)
 
 ## Overview
+
 単一ページで以下を実行する最小実装です。
 
-1. 職務経歴テキストをTarget LLMへ送信して生成（要約 / 職務経歴詳細 / 自己PR）
-2. 生成結果をJudge LLMで評価
+1. 職務経歴テキストを Target LLM へ送信して生成（要約 / 職務経歴詳細 / 自己PR）
+2. 生成結果を Judge LLM で評価
 3. Score / Reason / 合格判定を表示
+4. **人間フィードバック**: 生成結果に対するあなたのスコア・コメントを送信（Judge プロンプト改善に活用）
+5. **W&B 連携**: WANDB_API_KEY 設定時、生成・評価・人間評価を wandb にログ
+6. **Weave プロンプト管理**: プロンプトを Weave に publish し、バージョン管理・比較を可能に
 
 ### 対応ドメイン
-- **職務要約** (`resume_summary`): 採用担当向けの簡潔な要約（3〜6文）
-- **職務経歴（詳細）** (`resume_detail`): 構造化された職務経歴（会社・期間・業務・実績の数値化）
-- **自己PR** (`self_pr`): 200〜400文字の自己PR文（2〜3個の強み）
+
+| ドメイン ID | ラベル | 説明 |
+|------------|--------|------|
+| `resume_summary` | 職務要約 | 採用担当向けの簡潔な要約（3〜6文） |
+| `resume_detail` | 職務経歴（詳細） | 構造化された職務経歴（会社・期間・業務・実績の数値化） |
+| `self_pr` | 自己PR | 200〜400文字の自己PR文（2〜3個の強み） |
+
+---
+
+## システム構成
+
+### アーキテクチャ
+
+```
+ユーザー（職務経歴入力） → 生成エージェント（Target LLM） → 評価エージェント（Judge LLM）
+                                    ↑                              ↓
+                                    └── プロンプト改善 ←── 人間フィードバック収集
+                                                                    ↓
+                                              W&B（Traces / Table / Artifact / Prompts）
+```
+
+### コンポーネント
+
+| コンポーネント | 役割 |
+|---------------|------|
+| 生成エージェント | 職務経歴から職務要約・職務経歴詳細・自己PRを生成 |
+| 評価エージェント | LLM-as-a-Judge で生成結果を評価 |
+| 人間評価収集 | ユーザーが生成結果に対してスコア・コメントを付与 |
+| Judge プロンプト改善 | 人間評価を教師信号として Judge プロンプトの改善案を LLM 生成 |
+| 生成プロンプト改善 | Judge 結果を教師信号として生成プロンプトの改善案を LLM 生成 |
+| W&B 連携 | ログ・評価・プロンプトの一元管理 |
+
+### W&B / Weave データフロー
+
+| データ | 保存先 |
+|-------|--------|
+| 生成・評価・人間評価 | Weave Traces（`generate_log`, `judge_log`, `human_feedback_log`） |
+| Judge 評価結果 | メモリ（生成プロンプト改善の失敗ケース収集に利用） |
+| プロンプト | Weave Prompts（バージョン管理・比較） |
+
+**Weave Trace の保存先**: `https://wandb.ai/{entity}/{project}` の Traces タブ
+
+---
 
 ## Tech Stack
-- Next.js (App Router, TypeScript)
-- Gemini API (`@google/genai`)
 
-## Fixed Model Settings
+| 項目 | 技術 |
+|-----|------|
+| フレームワーク | Next.js (App Router, TypeScript) |
+| LLM | Gemini API（`@ax-llm/ax` / `@google/genai`） |
+| 永続化・実験管理 | wandb（Table, Artifact）、W&B Weave（Traces, Prompts） |
+| プロンプト管理 | Weave Prompts、`lib/config/domainPromptConfigs.ts` |
+
+### LLM プロバイダ（プロンプト改善タブで選択）
+
+Judge プロンプト改善・生成プロンプト改善タブの右側で選択可能:
+
+- **ax**: `@ax-llm/ax` を使用。シグネチャ（入出力宣言）でプロンプトを自動生成。
+  - **Few-shot**（既定）: ドメインのサンプル入力をプロンプトに含める
+  - **ゼロショット**: 最小限のプロンプト
+  - **GEPA**: AxGEPA による本格的な最適化（プロンプト改善タブで実行。生成・評価では Few-shot と同様）
+- **Gemini**: `@google/genai` を直接使用。
+
+生成・評価タブでは既定（ax / Few-shot）を使用。
+
+### Fixed Model Settings
+
 - Target LLM: `gemini-2.5-flash`
 - Judge LLM: `gemini-2.5-pro`
 
-## Prompt Configuration
-- ドメイン定義は `prompts/*.yml` に定義（resume_summary, resume_detail, self_pr）
-- サンプル入力は `samples/resume_inputs.yml` に定義（全ドメイン共通）
-- サーバー起動中は読み込み結果をメモリキャッシュ
-- `judge.instruction_template` 内の `{{RUBRIC_BULLETS}}` を `judge.rubric` から展開
+---
 
-## Architecture
-- `app/api/generate/route.ts`: generation endpoint (presentation layer)
-- `app/api/judge/route.ts`: judge endpoint (presentation layer)
-- `app/api/domain-config/route.ts`: domain config endpoint (presentation layer)
-- `app/api/domains/route.ts`: supported domains list endpoint (presentation layer)
-- `app/api/generate-evaluate/route.ts`: legacy combined endpoint (backward compatibility)
-- `lib/application/generateAndEvaluateUseCase.ts`: application layer
-- `lib/domain/llm.ts`: domain types and provider interface
-- `lib/infrastructure/gemini/GeminiProvider.ts`: Gemini provider implementation
-- `lib/contracts/generateEvaluate.ts`: shared request/response contract (`zod`)
-- `lib/config/domainPromptLoader.ts`: multi-domain prompt loader
-- `lib/config/resumeSummaryPromptLoader.ts`: resume_summary wrapper (backward compatibility)
+## Prompt Configuration
+
+- ドメイン定義は `lib/config/domainPromptConfigs.ts` に定義
+- サーバー起動中は読み込み結果をメモリキャッシュ
+- `{{RUBRIC_BULLETS}}` をルーブリックから自動展開
+- プロンプト初回ロード時および `POST /api/prompts/sync-to-weave` で Weave に publish
+
+---
+
+## Architecture（ファイル構成）
+
+- `app/api/generate/route.ts` - 生成 API
+- `app/api/judge/route.ts` - 評価 API
+- `app/api/domain-config/route.ts` - ドメイン設定取得
+- `app/api/domains/route.ts` - ドメイン一覧
+- `app/api/generate-evaluate/route.ts` - 後方互換の統合 API
+- `app/api/human-feedback/route.ts` - 人間評価の登録・一覧
+- `app/api/judge-prompt/improve/route.ts` - Judge プロンプト改善案生成
+- `app/api/target-prompt/improve/route.ts` - 生成プロンプト改善案生成
+- `app/api/wandb-status/route.ts` - W&B 設定状態
+- `app/api/weave/human-feedback/route.ts` - Weave 人間評価取得
+- `app/api/weave/judge-logs/route.ts` - Weave Judge ログ取得
+- `app/api/weave/debug/route.ts` - Weave 診断
+- `app/api/prompts/sync-to-weave/route.ts` - プロンプト Weave 同期
+- `lib/application/` - ユースケース層
+- `lib/domain/llm.ts` - ドメイン型・プロバイダインターフェース
+- `lib/infrastructure/ax/AxProvider.ts` - ax（DSPy 風）による Gemini 実装（既定）
+- `lib/infrastructure/gemini/GeminiProvider.ts` - 従来の Gemini 実装
+- `lib/infrastructure/humanFeedbackStore.ts` - 人間評価保存（メモリ + Weave）
+- `lib/infrastructure/weave/weaveClient.ts` - Weave クライアント初期化
+- `lib/infrastructure/weave/weaveProjectId.ts` - project_id 取得（entity/project 形式）
+- `lib/infrastructure/weave/weaveLogger.ts` - 生成・評価・人間評価の Trace 記録
+- `lib/infrastructure/weave/weaveQuery.ts` - Trace API からログ取得
+- `lib/infrastructure/weave/promptManager.ts` - Weave プロンプト publish
+- `lib/config/domainPromptConfigs.ts` - プロンプト・サンプル定義
+- `lib/contracts/generateEvaluate.ts` - 契約（zod）
+
+---
 
 ## UI
+
 - 生成モード選択（職務要約 / 職務経歴（詳細） / 自己PR）
-- 全体を `生成` / `評価` タブで切り替え
-- `生成` タブ: 2カラム構成（職務経歴入力 + 生成出力/Progress）
-- `評価` タブ: 「生成出力 / 評価結果」を左右並び表示し、その下にProgressを表示
-- Progress表示（Input accepted -> Generating -> Generated -> Judging -> Completed）
-- ドメイン別の生成/評価ボタン（要約を生成、職務経歴を生成、自己PRを生成 など）
-- `Advanced` の固定設定表示（Provider/Model/Prompt）
-- サンプル入力ボタン（YAML由来・2種類）
-- 生成要約の`Copy`と`最後の入力で再生成`
-- `Download .txt`、`Ctrl/Cmd + Enter`（要約生成）ショートカット
-- 入力エラーと実行エラーの分離表示
-- 前回結果とのスコア差分表示 + 合格/要改善表示
-- 実行中の経過秒表示とスケルトンローディング
+- `生成` / `評価` タブ切り替え
+- Progress 表示（Input accepted → Generating → Generated → Judging → Completed）
+- サンプル入力ボタン（3種類）
+- 人間フィードバック（生成結果へのスコア・コメント）
+- Judge / 生成プロンプト改善案生成
+- 「Weave からデータを取得」ボタン（Judge/生成プロンプト改善タブ）
+- Weave プロンプト同期、W&B ダッシュボードリンク
+
+---
 
 ## Setup
+
 1. Install dependencies
 
 ```bash
@@ -66,67 +149,79 @@ npm install
 ```bash
 cp .env.example .env.local
 # edit .env.local and set GEMINI_API_KEY
+# (optional) WANDB_API_KEY, WANDB_PROJECT, WANDB_ENTITY for wandb/Weave
 ```
 
-3. Start dev server
+3. (Optional) wandb / Weave を使う場合
+
+```bash
+npm install weave   # Weave トレース・プロンプト管理用（package.json に含まれる）
+```
+
+**環境変数（Weave 利用時）**
+
+| 変数 | 必須 | 説明 |
+|------|------|------|
+| `WANDB_API_KEY` | ○ | W&B API キー（[wandb.ai/settings](https://wandb.ai/settings) で取得） |
+| `WANDB_PROJECT` | △ | プロジェクト名（未設定時: `resume-assistant`） |
+| `WANDB_ENTITY` | 推奨 | W&B ユーザー/チーム名。未設定時は API からデフォルト entity を取得 |
+
+4. Start dev server
 
 ```bash
 npm run dev
 ```
 
-4. Open app
+5. Open [http://localhost:3000](http://localhost:3000)
 
-- [http://localhost:3000](http://localhost:3000)
-
-5. Run tests
+6. Run tests
 
 ```bash
 npm test
 ```
 
+---
+
 ## API
-`POST /api/generate`
 
-`POST /api/judge`
+| エンドポイント | 説明 |
+|---------------|------|
+| `POST /api/generate` | 生成 |
+| `POST /api/judge` | 評価 |
+| `GET /api/domain-config?domain=` | ドメイン設定取得 |
+| `GET /api/domains` | ドメイン一覧 |
+| `POST /api/human-feedback` | 人間評価を登録 |
+| `GET /api/human-feedback` | 人間評価一覧（クエリ: `domain`, `limit`） |
+| `POST /api/judge-prompt/improve` | Judge プロンプト改善案を LLM 生成 |
+| `POST /api/target-prompt/improve` | 生成プロンプト改善案を LLM 生成 |
+| `GET /api/wandb-status` | W&B 設定状態（`configured`, `dashboardUrl`） |
+| `GET /api/weave/human-feedback?domain=&limit=` | Weave から人間評価ログ取得（Judge 改善用） |
+| `GET /api/weave/judge-logs?domain=&limit=` | Weave から Judge 評価ログ取得（生成プロンプト改善用） |
+| `GET /api/weave/debug` | Weave 状態診断（project_id、件数、op 一覧） |
+| `POST /api/prompts/sync-to-weave` | プロンプトを Weave に同期 |
 
-`GET /api/domain-config?domain=resume_summary`
+### Request / Response 例
 
-`GET /api/domains`
-
-フロントエンドは生成モードに応じて `/api/generate` に `domain` を指定し、続けて `/api/judge` を呼び出します。
-
-### Generate Request (`POST /api/generate`)
+**Generate Request**
 
 ```json
 {
-  "userInput": "2019年にSIerへ入社し、金融系Webシステムの保守運用を担当...",
+  "userInput": "2019年にSIerへ入社し...",
   "domain": "resume_summary"
 }
 ```
 
-- `domain`: 省略時は `resume_summary`。`resume_detail` / `self_pr` も指定可能。
-
-### Generate Response (`POST /api/generate`)
+**Judge Request**
 
 ```json
 {
-  "generatedOutput": "..."
-}
-```
-
-### Judge Request (`POST /api/judge`)
-
-```json
-{
-  "userInput": "2019年にSIerへ入社し、金融系Webシステムの保守運用を担当...",
+  "userInput": "...",
   "generatedOutput": "...",
   "domain": "resume_summary"
 }
 ```
 
-- `domain`: 生成時に使用したドメインを指定。省略時は `resume_summary`。
-
-### Judge Response (`POST /api/judge`)
+**Judge Response**
 
 ```json
 {
@@ -139,72 +234,59 @@ npm test
 }
 ```
 
-### Error Response
-
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "message"
-  }
-}
-```
-
-### Domain Config Response (`GET /api/domain-config?domain=resume_summary`)
-
-```json
-{
-  "domain": "resume_summary",
-  "rubricVersion": 1,
-  "passThreshold": 4,
-  "samples": [
-    {
-      "title": "Web開発エンジニア",
-      "input": "..."
-    }
-  ]
-}
-```
-
-- `domain` クエリ: `resume_summary` / `resume_detail` / `self_pr`。省略時は `resume_summary`。
-
-### Domains List Response (`GET /api/domains`)
-
-```json
-{
-  "domains": [
-    { "id": "resume_summary", "label": "職務要約", "promptFile": "prompts/resume_summary.yml" },
-    { "id": "resume_detail", "label": "職務経歴（詳細）", "promptFile": "prompts/resume_detail.yml" },
-    { "id": "self_pr", "label": "自己PR", "promptFile": "prompts/self_pr.yml" }
-  ]
-}
-```
-
 ### Validation
-- `userInput`（職務経歴入力）は必須
-- `userInput` は 4000 文字以内
-- `generatedOutput` は必須
-- `generatedOutput` は 12000 文字以内
+
+- `userInput`: 必須、4000 文字以内
+- `generatedOutput`: 必須、12000 文字以内
 
 ### Error Codes
-- `INVALID_JSON`
-- `VALIDATION_ERROR`
-- `CONFIG_ERROR`
-- `PROVIDER_TIMEOUT`
-- `PROVIDER_RESPONSE_INVALID`
-- `PROVIDER_ERROR`
-- `INTERNAL_ERROR`
 
-## DoD Checkpoints
-- 入力すると出力が生成される（職務要約 / 職務経歴詳細 / 自己PR）
-- 生成済み出力をLLMが評価できる
-- ScoreとReasonが表示される
+`INVALID_JSON` / `VALIDATION_ERROR` / `CONFIG_ERROR` / `PROVIDER_TIMEOUT` / `PROVIDER_RESPONSE_INVALID` / `PROVIDER_ERROR` / `INTERNAL_ERROR`
 
-## Notes
-- APIキーはサーバー側でのみ使用
-- データ保存なし
-- UI操作として `generate` と `judge` は分離
-- 内部エラー詳細はクライアントへ露出しない
-- モデル呼び出しは20秒でタイムアウト
-- API/UIは `zod` スキーマを共有
-- 各ドメイン設定はYAMLをサーバー側で読み込む（prompts/*.yml）
+---
+
+## Weave トラブルシューティング
+
+**「Weave からデータを取得」で 0 件になる場合**
+
+1. **診断 API を確認**: `GET /api/weave/debug` で `projectId`、`counts`、`diagnostic` を確認
+2. **環境変数**: `WANDB_ENTITY` を設定し、サーバーを再起動
+3. **データの有無**: 生成 → 評価 → 手動評価の順で実行すると Weave に保存される
+4. **ドメイン**: 選択中のドメイン（職務要約 / 職務経歴（詳細） / 自己PR）にデータがあるか確認
+
+**技術メモ**
+
+- Trace API の `op_name` はフル URI 形式（`weave:///entity/project/op/name:hash`）で返るため、`$contains` でフィルタ
+- `project_id` は `entity/project` 形式で保存・取得を統一（`weaveProjectId.ts`）
+- domain フィルタは Trace API の `query` で `inputs.domain` を指定
+
+---
+
+## 非機能要件
+
+- 既存 API の後方互換性を維持
+- wandb をデータ保存の中核とする
+- 人間評価はスコアのみでも送信可能（コメント任意）
+- プロンプト改善は自動適用せず、人間がレビューして反映
+
+---
+
+## 用語集
+
+| 用語 | 説明 |
+|-----|------|
+| 生成エージェント | 職務経歴から職務要約・自己PR等を生成する LLM（Target LLM） |
+| 評価エージェント | 生成結果を LLM-as-a-Judge で評価する LLM（Judge LLM） |
+| 人間フィードバック | ユーザーが生成結果に付与するスコア・コメント |
+| ルーブリック | Judge の評価観点（`domainPromptConfigs` の `judgeRubric`） |
+| ドメイン | 生成モード（resume_summary / resume_detail / self_pr） |
+
+---
+
+## 参考リンク
+
+- [Weave Service API (Trace)](https://docs.wandb.ai/weave/cookbooks/weave_via_service_api)
+- [W&B Weave Evaluation Tutorial](https://docs.wandb.ai/weave/tutorial-eval)
+- [W&B Log Tables](https://docs.wandb.ai/models/track/log/log-tables)
+- [W&B Artifacts](https://docs.wandb.ai/models/artifacts)
+- [W&B Prompts](https://docs.wandb.ai/weave/guides/core-types/prompts)

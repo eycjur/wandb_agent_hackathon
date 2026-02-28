@@ -42,7 +42,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const provider = getLLMProvider();
+    const provider = getLLMProvider({
+      llmProvider: parsedRequest.data.llmProvider,
+      axMethod: parsedRequest.data.axMethod
+    });
     const generatedOutput = await provider.generateOutput(
       parsedRequest.data.userInput,
       parsedRequest.data.domain
@@ -50,6 +53,16 @@ export async function POST(request: NextRequest) {
     const response = GenerateSuccessResponseSchema.parse({
       generatedOutput
     });
+
+    // wandb にログ（非同期、失敗してもレスポンスは返す）
+    const { logGenerate } = await import("@/lib/infrastructure/weave/weaveLogger");
+    logGenerate({
+      domain: parsedRequest.data.domain,
+      userInputLength: parsedRequest.data.userInput.length,
+      generatedOutputLength: generatedOutput.length,
+      userInput: parsedRequest.data.userInput,
+      generatedOutput
+    }).catch((err) => console.warn("[generate] weave log failed:", err));
 
     return NextResponse.json(response, {
       status: 200
