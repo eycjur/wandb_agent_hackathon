@@ -6,8 +6,6 @@ import { JUDGE_MODEL, MODEL_TIMEOUT_MS, TARGET_MODEL } from "@/lib/config/llm";
 import { JudgeResult, LLMProvider } from "@/lib/domain/llm";
 import type { AxMethodId } from "@/lib/contracts/generateEvaluate";
 
-const TARGET_AX_MODEL = AxAIGoogleGeminiModel.Gemini25Flash;
-const JUDGE_AX_MODEL = AxAIGoogleGeminiModel.Gemini25Pro;
 
 type AxProviderConfig = {
   axMethod?: AxMethodId;
@@ -44,7 +42,7 @@ export class AxProvider implements LLMProvider {
       name: "google-gemini",
       apiKey: this.getApiKey(),
       config: {
-        model: TARGET_AX_MODEL,
+        model: TARGET_MODEL as AxAIGoogleGeminiModel,
         temperature: 0.7
       },
     });
@@ -55,7 +53,7 @@ export class AxProvider implements LLMProvider {
       name: "google-gemini",
       apiKey: this.getApiKey(),
       config: {
-        model: JUDGE_AX_MODEL,
+        model: JUDGE_MODEL as AxAIGoogleGeminiModel,
         temperature: 0
       }
     });
@@ -220,6 +218,7 @@ export class AxProvider implements LLMProvider {
           "Model call timed out."
         );
       }
+      console.error("[AxProvider.judgeOutput] unexpected error:", error);
       throw new AppError(
         502,
         "PROVIDER_ERROR",
