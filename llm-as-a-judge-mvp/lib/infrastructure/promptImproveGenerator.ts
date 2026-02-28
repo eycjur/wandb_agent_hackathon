@@ -4,7 +4,7 @@
  */
 import { ai, ax, AxAIGoogleGeminiModel } from "@ax-llm/ax";
 import { AppError } from "@/lib/errors";
-import { PROMPT_IMPROVE_TIMEOUT_MS } from "@/lib/config/llm";
+import { JUDGE_MODEL, PROMPT_IMPROVE_TIMEOUT_MS } from "@/lib/config/llm";
 import { generateText } from "@/lib/infrastructure/gemini/geminiTextGenerator";
 import type { AxMethodId, LLMProviderId } from "@/lib/contracts/generateEvaluate";
 
@@ -42,7 +42,7 @@ export async function generateTextForPromptImprovement(
     name: "google-gemini",
     apiKey,
     config: {
-      model: AxAIGoogleGeminiModel.Gemini25Pro,
+      model: JUDGE_MODEL as AxAIGoogleGeminiModel,
       temperature: 0.3
     }
   });
