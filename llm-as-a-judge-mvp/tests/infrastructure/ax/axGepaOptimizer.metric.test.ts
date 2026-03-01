@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateJudgeGepaMetric } from "@/lib/infrastructure/ax/gepaMetrics";
+import { calculateJudgeGepaMetric } from "@/lib/application/promptOptimization/gepaMetrics";
 
 describe("calculateJudgeGepaMetric", () => {
   const rubricKeywords = ["実績", "具体性", "読みやすさ"];

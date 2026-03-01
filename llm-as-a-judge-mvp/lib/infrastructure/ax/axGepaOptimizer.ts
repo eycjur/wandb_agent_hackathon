@@ -12,7 +12,7 @@ import {
   buildRubricKeywords,
   calculateJudgeGepaMetric,
   type JudgeGepaMetricExample
-} from "@/lib/infrastructure/ax/gepaMetrics";
+} from "@/lib/application/promptOptimization/gepaMetrics";
 
 export interface GepaJudgeOptimizationResult {
   suggestion: string;

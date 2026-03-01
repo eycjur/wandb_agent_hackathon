@@ -11,7 +11,7 @@ import type { EvaluationLogRecord } from "@/lib/infrastructure/evaluationLogStor
 import {
   calculateTargetGepaMetric,
   type TargetGepaMetricExample
-} from "@/lib/infrastructure/ax/gepaMetrics";
+} from "@/lib/application/promptOptimization/gepaMetrics";
 
 export interface GepaTargetOptimizationResult {
   suggestion: string;

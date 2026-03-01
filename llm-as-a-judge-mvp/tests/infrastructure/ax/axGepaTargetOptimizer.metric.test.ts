@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateTargetGepaMetric,
   scoreTargetOutputFormat
-} from "@/lib/infrastructure/ax/gepaMetrics";
+} from "@/lib/application/promptOptimization/gepaMetrics";
 
 describe("calculateTargetGepaMetric", () => {
   it("同じ出力品質なら baseline より改善幅が大きいほど高スコアになる", () => {
