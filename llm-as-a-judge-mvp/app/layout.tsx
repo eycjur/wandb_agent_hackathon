@@ -20,7 +20,7 @@ export default function RootLayout({
           href="https://fonts.gstatic.com"
           crossOrigin="anonymous"
         />
-        {/* eslint-disable-next-line @next/next/no-page-custom-font -- App Router では _document.js が存在しない */}
+        {/* eslint-disable-next-line @next/next/no-page-custom-font -- App Router では layout.tsx でのフォント読み込みが正規の方法 */}
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Noto+Sans+JP:wght@400;500;600;700;800;900&display=swap"
           rel="stylesheet"

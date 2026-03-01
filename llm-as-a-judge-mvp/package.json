@@ -6,21 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "npx eslint@9 .",
+    "lint": "eslint .",
     "test": "vitest run",
+    "lint:fix": "eslint --fix .",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "diff": "^7.0.0",
     "@ax-llm/ax": "^19.0.10",
     "@google/genai": "^1.43.0",
+    "@openai/agents": "^0.5.2",
+    "diff": "^7.0.0",
     "next": "^16.1.6",
+    "openai": "^6.25.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "zod": "^4.3.6",
     "weave": "^0.12.0",
-    "openai": "^6.25.0",
-    "@openai/agents": "^0.5.2"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.3.2",
