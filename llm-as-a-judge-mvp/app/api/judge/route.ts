@@ -42,21 +42,53 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const provider = getLLMProvider();
+    const provider = getLLMProvider({
+      llmProvider: parsedRequest.data.llmProvider,
+      axMethod: parsedRequest.data.axMethod
+    });
     const judgeResult = await provider.judgeOutput(
       parsedRequest.data.userInput,
       parsedRequest.data.generatedOutput,
       parsedRequest.data.domain
     );
 
+    const pass = judgeResult.score >= judgeResult.passThreshold;
     const response = JudgeSuccessResponseSchema.parse({
       domain: judgeResult.domain,
       rubricVersion: judgeResult.rubricVersion,
       passThreshold: judgeResult.passThreshold,
-      pass: judgeResult.score >= judgeResult.passThreshold,
+      pass,
       score: judgeResult.score,
       reason: judgeResult.reason
     });
+
+    // wandb にログ（非同期、失敗してもレスポンスは返す）
+    const { logJudge } = await import("@/lib/infrastructure/weave/weaveLogger");
+    logJudge({
+      domain: judgeResult.domain,
+      score: judgeResult.score,
+      pass,
+      passThreshold: judgeResult.passThreshold,
+      rubricVersion: judgeResult.rubricVersion,
+      userInput: parsedRequest.data.userInput,
+      generatedOutput: parsedRequest.data.generatedOutput,
+      reason: judgeResult.reason
+    }).catch((err) => console.warn("[judge] weave log failed:", err));
+
+    // 評価結果を保存（生成プロンプト改善の失敗ケース収集に利用）
+    const { saveEvaluationLog } = await import("@/lib/infrastructure/evaluationLogStore");
+    saveEvaluationLog({
+      domain: judgeResult.domain,
+      userInput: parsedRequest.data.userInput,
+      generatedOutput: parsedRequest.data.generatedOutput,
+      judgeResult: {
+        score: judgeResult.score,
+        reason: judgeResult.reason,
+        pass,
+        passThreshold: judgeResult.passThreshold,
+        rubricVersion: judgeResult.rubricVersion
+      }
+    }).catch((err) => console.warn("[judge] evaluation log save failed:", err));
 
     return NextResponse.json(response, {
       status: 200

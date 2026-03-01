@@ -24,7 +24,6 @@ function jsonError(status: number, code: ErrorCode, message: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const useCase = new GenerateAndEvaluateUseCase(getLLMProvider());
   let rawBody: unknown;
 
   try {
@@ -42,6 +41,12 @@ export async function POST(request: NextRequest) {
       firstIssue?.message ?? "入力値が不正です。"
     );
   }
+
+  const provider = getLLMProvider({
+    llmProvider: parsedRequest.data.llmProvider,
+    axMethod: parsedRequest.data.axMethod
+  });
+  const useCase = new GenerateAndEvaluateUseCase(provider);
 
   try {
     const result = await useCase.execute(

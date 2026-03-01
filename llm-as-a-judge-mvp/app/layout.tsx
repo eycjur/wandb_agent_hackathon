@@ -20,13 +20,23 @@ export default function RootLayout({
           href="https://fonts.gstatic.com"
           crossOrigin="anonymous"
         />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font -- App Router では _document.js が存在しない */}
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Noto+Sans+JP:wght@400;500;600;700;800;900&display=swap"
           rel="stylesheet"
         />
         <meta name="theme-color" content="#0b1120" />
       </head>
-      <body>{children}</body>
+      <body>
+        <header className="hero">
+          <p className="kicker">Recruiting Assistant</p>
+          <h1>職務経歴書アシスタント</h1>
+          <p className="subtitle">
+            職務経歴テキストから要約・職務経歴詳細・自己PRを生成し、LLMで評価します。
+          </p>
+        </header>
+        {children}
+      </body>
     </html>
   );
 }

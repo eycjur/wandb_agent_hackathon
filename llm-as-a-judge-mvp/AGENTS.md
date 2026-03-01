@@ -19,16 +19,24 @@
   - `app/api/judge/route.ts`
   - `app/api/domain-config/route.ts`
   - `app/api/generate-evaluate/route.ts`（後方互換）
+  - `app/api/weave/human-feedback/route.ts` - Weave 人間評価取得
+  - `app/api/weave/judge-logs/route.ts` - Weave Judge ログ取得
+  - `app/api/weave/debug/route.ts` - Weave 診断
 - 契約（zod）:
   - `lib/contracts/generateEvaluate.ts`
 - LLMプロバイダ:
   - `lib/domain/llm.ts`
   - `lib/infrastructure/gemini/GeminiProvider.ts`
   - `lib/infrastructure/llmProviderFactory.ts`
-- ドメイン設定（YAML）:
-  - `prompts/resume_summary.yml`
-  - `samples/resume_inputs.yml`
+- ドメイン設定:
+  - `lib/config/domainPromptConfigs.ts`（プロンプト・サンプル定義）
+  - `lib/config/domainPromptLoader.ts`
   - `lib/config/resumeSummaryPromptLoader.ts`
+- Weave インフラ:
+  - `lib/infrastructure/weave/weaveClient.ts` - クライアント初期化
+  - `lib/infrastructure/weave/weaveProjectId.ts` - project_id（entity/project 形式）
+  - `lib/infrastructure/weave/weaveLogger.ts` - Trace 記録
+  - `lib/infrastructure/weave/weaveQuery.ts` - Trace API から取得
 
 ## 3. 変更時の必須ルール
 - API/レスポンス形式を変えるときは、先に `lib/contracts/generateEvaluate.ts` を更新する
@@ -39,11 +47,10 @@
 - Gemini APIの直接呼び出しは `GeminiProvider` に集約する
 
 ## 4. プロンプト/サンプル運用ルール
-- 現行ドメインは `resume_summary` 固定（拡張は明示要求がある場合のみ）
-- `prompts/resume_summary.yml` のスキーマを維持する
-  - `judge.instruction_template` の `{{RUBRIC_BULLETS}}` は維持
-- サンプルは `samples/resume_inputs.yml` に分離管理する
-- `resumeSummaryPromptLoader` はキャッシュするため、設定反映確認時はサーバー再起動を前提にする
+- 現行ドメインは `resume_summary` / `resume_detail` / `self_pr`
+- プロンプト・サンプルは `lib/config/domainPromptConfigs.ts` で定義
+  - `{{RUBRIC_BULLETS}}` はルーブリックから自動展開
+- `domainPromptLoader` はキャッシュするため、設定反映確認時はサーバー再起動を前提にする
 
 ## 5. UI実装ルール
 - 画面文言は日本語中心で統一
@@ -72,7 +79,12 @@
 4. テストを追加・更新し、全て成功した
 5. 不要なファイル（デバッグログ/一時ファイル）を残していない
 
-## 8. 非目標（勝手に拡張しない）
+## 8. Weave 関連の注意
+- `project_id` は `entity/project` 形式で統一。`weaveProjectId.ts` の `getWeaveProjectId()` を使用
+- Trace API の `op_name` はフル URI 形式のため、`op_names` フィルタではなく `query` の `$contains` を使用
+- domain フィルタは Trace API の `query` で `$getField("inputs.domain")` を指定
+
+## 9. 非目標（勝手に拡張しない）
 - 永続化（DB/履歴）追加
 - モデル設定UIの追加
 - 認証・認可の導入
