@@ -6,11 +6,8 @@ import { ai, ax, AxAIGoogleGeminiModel, AxGEPA } from "@ax-llm/ax";
 import { AppError } from "@/lib/errors";
 import { getDomainPromptConfig } from "@/lib/config/domainPromptLoader";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
-import { MODEL_TIMEOUT_MS } from "@/lib/config/llm";
+import { JUDGE_MODEL, MODEL_TIMEOUT_MS, TARGET_MODEL } from "@/lib/config/llm";
 import type { EvaluationLogRecord } from "@/lib/infrastructure/evaluationLogStore";
-
-const TARGET_AX_MODEL = AxAIGoogleGeminiModel.Gemini25Flash;
-const JUDGE_AX_MODEL = AxAIGoogleGeminiModel.Gemini25Pro;
 
 export interface GepaTargetOptimizationResult {
   suggestion: string;
@@ -73,13 +70,13 @@ export async function optimizeTargetPromptWithGEPA(
   const targetAI = ai({
     name: "google-gemini",
     apiKey,
-    config: { model: TARGET_AX_MODEL, temperature: 0.7 }
+    config: { model: TARGET_MODEL as AxAIGoogleGeminiModel, temperature: 0.7 }
   });
 
   const judgeAI = ai({
     name: "google-gemini",
     apiKey,
-    config: { model: JUDGE_AX_MODEL, temperature: 0 }
+    config: { model: JUDGE_MODEL as AxAIGoogleGeminiModel, temperature: 0 }
   });
 
   const metricFn = async (arg: Readonly<{ prediction: unknown; example: unknown }>): Promise<number> => {

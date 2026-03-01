@@ -6,10 +6,8 @@ import { ai, ax, AxAIGoogleGeminiModel, AxGEPA } from "@ax-llm/ax";
 import { AppError } from "@/lib/errors";
 import { getDomainPromptConfig } from "@/lib/config/domainPromptLoader";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
-import { MODEL_TIMEOUT_MS } from "@/lib/config/llm";
+import { JUDGE_MODEL, MODEL_TIMEOUT_MS } from "@/lib/config/llm";
 import type { HumanFeedbackRecord } from "@/lib/infrastructure/humanFeedbackStore";
-
-const JUDGE_AX_MODEL = AxAIGoogleGeminiModel.Gemini25Pro;
 
 export interface GepaJudgeOptimizationResult {
   suggestion: string;
@@ -76,7 +74,7 @@ export async function optimizeJudgePromptWithGEPA(
     name: "google-gemini",
     apiKey,
     config: {
-      model: JUDGE_AX_MODEL,
+      model: JUDGE_MODEL as AxAIGoogleGeminiModel,
       temperature: 0
     }
   });
