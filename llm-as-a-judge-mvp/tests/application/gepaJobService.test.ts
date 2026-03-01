@@ -2,7 +2,10 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GepaJobService } from "@/lib/application/gepaJobService";
+import {
+  GepaJobService,
+  type GepaJobServiceOptions
+} from "@/lib/application/gepaJobService";
 
 const tempDirs: string[] = [];
 
@@ -105,7 +108,9 @@ describe("GepaJobService", () => {
       "utf8"
     );
 
-    const optimizeTarget = vi.fn(async () => ({
+    const optimizeTarget = vi.fn<
+      NonNullable<GepaJobServiceOptions["optimizeTarget"]>
+    >(async () => ({
       suggestion: "optimized target prompt",
       analysisSummary: "analysis",
       resultSource: "gepa"

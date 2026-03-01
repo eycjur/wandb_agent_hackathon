@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppError } from "@/lib/errors";
+import type { HumanFeedbackRecord } from "@/lib/infrastructure/humanFeedbackStore";
 
 const mockGetDomainPromptConfig = vi.fn();
 const mockGenerateTextForPromptImprovement = vi.fn();
@@ -30,7 +31,7 @@ vi.mock("@/lib/infrastructure/weave/weaveProjectId", () => ({
   getWeaveProjectId: (...args: unknown[]) => mockGetWeaveProjectId(...args)
 }));
 
-const feedbackRecords = [
+const feedbackRecords: HumanFeedbackRecord[] = [
   {
     id: "hf_1",
     domain: "resume_summary",

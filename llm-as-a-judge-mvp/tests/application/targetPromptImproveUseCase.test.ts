@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppError } from "@/lib/errors";
+import type { EvaluationLogRecord } from "@/lib/infrastructure/evaluationLogStore";
 
 const mockGetDomainPromptConfig = vi.fn();
 const mockGenerateTextForPromptImprovement = vi.fn();
@@ -24,7 +25,7 @@ vi.mock("@/lib/infrastructure/ax/axGepaTargetOptimizer", () => ({
     mockOptimizeTargetPromptWithGEPA(...args)
 }));
 
-const failedRecords = [
+const failedRecords: EvaluationLogRecord[] = [
   {
     id: "ev_1",
     domain: "resume_summary",
