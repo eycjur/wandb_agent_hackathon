@@ -14,6 +14,7 @@
   "dependencies": {
     "@ax-llm/ax": "^19.0.10",
     "@google/genai": "^1.43.0",
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "@openai/agents": "^0.5.2",
     "diff": "^7.0.0",
     "next": "^16.1.6",
