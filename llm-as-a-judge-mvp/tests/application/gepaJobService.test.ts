@@ -55,7 +55,8 @@ describe("GepaJobService", () => {
       optimizeJudge: async () => ({
         suggestion: "optimized judge prompt",
         analysisSummary: "analysis",
-        currentPrompt: "current prompt"
+        currentPrompt: "current prompt",
+        resultSource: "gepa"
       })
     });
 
@@ -106,7 +107,8 @@ describe("GepaJobService", () => {
 
     const optimizeTarget = vi.fn(async () => ({
       suggestion: "optimized target prompt",
-      analysisSummary: "analysis"
+      analysisSummary: "analysis",
+      resultSource: "gepa"
     }));
 
     const service = new GepaJobService({

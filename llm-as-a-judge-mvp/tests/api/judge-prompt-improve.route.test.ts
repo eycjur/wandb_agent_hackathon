@@ -30,7 +30,8 @@ describe("POST /api/judge-prompt/improve", () => {
     ]);
     mockGenerateJudgePromptImprovement.mockResolvedValue({
       suggestion: "改善版の instruction_template テキスト",
-      analysisSummary: "Judge が高めに評価する傾向がある"
+      analysisSummary: "Judge が高めに評価する傾向がある",
+      resultSource: "standard"
     });
   });
 
@@ -65,6 +66,7 @@ describe("POST /api/judge-prompt/improve", () => {
     expect(response.status).toBe(200);
     expect(body.suggestion).toBe("改善版の instruction_template テキスト");
     expect(body.analysisSummary).toBe("Judge が高めに評価する傾向がある");
+    expect(body.resultSource).toBe("standard");
     expect(mockLoadJudgeFeedbackForPromptOptimization).toHaveBeenCalledWith(
       "resume_summary",
       10

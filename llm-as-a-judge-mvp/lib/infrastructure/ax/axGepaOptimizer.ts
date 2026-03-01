@@ -6,13 +6,18 @@ import { ai, ax, AxAIGoogleGeminiModel, AxGEPA } from "@ax-llm/ax";
 import { AppError } from "@/lib/errors";
 import { getDomainPromptConfig } from "@/lib/config/domainPromptLoader";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
-import { JUDGE_MODEL, MODEL_TIMEOUT_MS } from "@/lib/config/llm";
+import { GEPA_MODEL } from "@/lib/config/llm";
 import type { HumanFeedbackRecord } from "@/lib/infrastructure/humanFeedbackStore";
 import {
   buildRubricKeywords,
   calculateJudgeGepaMetric,
   type JudgeGepaMetricExample
 } from "@/lib/application/promptOptimization/gepaMetrics";
+import {
+  type GepaCompileBudget,
+  GEPA_JUDGE_FAST_UI_BUDGET,
+  truncateForGepa
+} from "@/lib/application/promptOptimization/gepaRuntimeConfig";
 
 export interface GepaJudgeOptimizationResult {
   suggestion: string;
@@ -24,7 +29,8 @@ export interface GepaJudgeOptimizationResult {
  */
 export async function optimizeJudgePromptWithGEPA(
   feedbackRecords: HumanFeedbackRecord[],
-  domain: DomainId
+  domain: DomainId,
+  compileBudget: GepaCompileBudget = GEPA_JUDGE_FAST_UI_BUDGET
 ): Promise<GepaJudgeOptimizationResult> {
   const withJudgeResult = feedbackRecords.filter((r) => r.judgeResult != null);
   if (withJudgeResult.length < 3) {
@@ -46,6 +52,7 @@ export async function optimizeJudgePromptWithGEPA(
   }
 
   const promptConfig = await getDomainPromptConfig(domain);
+  const budget = compileBudget;
   const descriptionParts = [
     promptConfig.judgeInstruction,
     "",
@@ -59,12 +66,14 @@ export async function optimizeJudgePromptWithGEPA(
 
   const rubricKeywords = buildRubricKeywords(promptConfig.judgeRubric);
 
-  const examples = withJudgeResult.slice(0, 15).map((r) => ({
-    userInput: r.userInput,
-    generatedOutput: r.generatedOutput,
+  const examples = withJudgeResult.slice(0, budget.maxExamples).map((r) => ({
+    userInput: truncateForGepa(r.userInput, budget.maxInputChars),
+    generatedOutput: truncateForGepa(r.generatedOutput, budget.maxOutputChars),
     humanScore: r.humanScore,
     passThreshold: promptConfig.passThreshold,
     humanComment: r.humanComment
+      ? truncateForGepa(r.humanComment, budget.maxInputChars)
+      : undefined
   }));
 
   const metricFn = (arg: Readonly<{ prediction: unknown; example: unknown }>): number => {
@@ -85,17 +94,17 @@ export async function optimizeJudgePromptWithGEPA(
     name: "google-gemini",
     apiKey,
     config: {
-      model: JUDGE_MODEL as AxAIGoogleGeminiModel,
+      model: GEPA_MODEL as AxAIGoogleGeminiModel,
       temperature: 0
     }
   });
 
   const optimizer = new AxGEPA({
     studentAI,
-    numTrials: 8,
+    numTrials: budget.numTrials,
     minibatch: true,
-    minibatchSize: 4,
-    earlyStoppingTrials: 3,
+    minibatchSize: budget.minibatchSize,
+    earlyStoppingTrials: budget.earlyStoppingTrials,
     verbose: false
   });
 
@@ -106,15 +115,15 @@ export async function optimizeJudgePromptWithGEPA(
         reject(
           new AppError(504, "PROVIDER_TIMEOUT", "GEPA 最適化がタイムアウトしました。", "AxGEPA compile timed out.")
         ),
-      MODEL_TIMEOUT_MS * 3
+      budget.compileTimeoutMs
     );
   });
 
   try {
     const result = await Promise.race([
       optimizer.compile(judgeProgram, examples, metricFn, {
-        maxMetricCalls: 80,
-        maxIterations: 5
+        maxMetricCalls: budget.maxMetricCalls,
+        maxIterations: budget.maxIterations
       }),
       timeoutPromise
     ]);

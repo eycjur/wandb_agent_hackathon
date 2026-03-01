@@ -146,6 +146,13 @@ function toPersistedJobRecord(raw: unknown): GepaJobRecord | null {
   const startedAt = typeof raw.startedAt === "string" ? raw.startedAt : undefined;
   const finishedAt =
     typeof raw.finishedAt === "string" ? raw.finishedAt : undefined;
+  const parsedResultSource: JudgePromptImprovementResult["resultSource"] =
+    isObject(raw.result) &&
+    (raw.result.resultSource === "gepa" ||
+      raw.result.resultSource === "fallback" ||
+      raw.result.resultSource === "standard")
+      ? raw.result.resultSource
+      : "gepa";
   const result =
     isObject(raw.result) &&
     typeof raw.result.suggestion === "string" &&
@@ -153,9 +160,14 @@ function toPersistedJobRecord(raw: unknown): GepaJobRecord | null {
       ? {
           suggestion: raw.result.suggestion,
           analysisSummary: raw.result.analysisSummary,
+          resultSource: parsedResultSource,
           currentPrompt:
             typeof raw.result.currentPrompt === "string"
               ? raw.result.currentPrompt
+              : undefined,
+          degradedReason:
+            typeof raw.result.degradedReason === "string"
+              ? raw.result.degradedReason
               : undefined
         }
       : undefined;

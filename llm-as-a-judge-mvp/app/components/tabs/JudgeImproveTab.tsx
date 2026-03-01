@@ -2,23 +2,17 @@
 
 import { useEffect, useState } from "react";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
-import type {
-  AxMethodId,
-  GepaJobStatusResponse,
-  LLMProviderId
-} from "@/lib/contracts/generateEvaluate";
+import type { AxMethodId, LLMProviderId } from "@/lib/contracts/generateEvaluate";
 import { ProgressPanel, COMMON_PROGRESS_STEPS } from "@/app/components/ProgressPanel";
 import { PromptDiffView } from "@/app/components/PromptDiffView";
 import { ExpandableTextCell } from "@/app/components/ExpandableTextCell";
-import {
-  isGepaEnqueueResponse,
-  isGepaStatusResponse
-} from "@/app/components/tabs/gepaJobClient";
 
 type ImprovementResult = {
   suggestion: string;
   analysisSummary: string;
   currentPrompt?: string;
+  resultSource: "gepa" | "fallback" | "standard";
+  degradedReason?: string;
 };
 
 type Props = {
@@ -39,9 +33,6 @@ type WeaveHumanFeedbackRecord = {
   createdAt: string;
 };
 
-const GEPA_POLL_INTERVAL_MS = 1500;
-const GEPA_POLL_MAX_ATTEMPTS = 240;
-
 export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprovementGenerated }: Props) {
   const [llmProvider, setLlmProvider] = useState<LLMProviderId>("ax");
   const [axMethod, setAxMethod] = useState<AxMethodId>("few-shot");
@@ -53,8 +44,6 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
   const [wandbConfigured, setWandbConfigured] = useState(false);
   const [weaveData, setWeaveData] = useState<WeaveHumanFeedbackRecord[] | null>(null);
   const [weaveDataLoading, setWeaveDataLoading] = useState(false);
-  const [gepaJobId, setGepaJobId] = useState<string | null>(null);
-  const [gepaJobStatus, setGepaJobStatus] = useState<GepaJobStatusResponse["status"] | null>(null);
 
   const handleFetchWeaveData = async () => {
     setWeaveDataLoading(true);
@@ -89,104 +78,12 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
     void loadWandbStatus();
   }, []);
 
-  useEffect(() => {
-    if (!gepaJobId) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let attempts = 0;
-
-    const pollStatus = async () => {
-      try {
-        attempts += 1;
-        if (attempts > GEPA_POLL_MAX_ATTEMPTS) {
-          throw new Error(
-            "GEPA ジョブの待機時間が上限に達しました。しばらくしてから再度ご確認ください。"
-          );
-        }
-        const res = await fetch(`/api/gepa-jobs/${gepaJobId}`, { cache: "no-store" });
-        const data: unknown = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const err = data as { error?: { message?: string } };
-          throw new Error(err?.error?.message ?? "GEPA ジョブ状態の取得に失敗しました");
-        }
-        if (!isGepaStatusResponse(data)) {
-          throw new Error("GEPA ジョブ状態の応答形式が不正です");
-        }
-        if (cancelled) return;
-
-        setGepaJobStatus(data.status);
-        if (data.status === "succeeded") {
-          if (!data.result) {
-            throw new Error("GEPA ジョブ結果が空です");
-          }
-          setImprovement({
-            suggestion: data.result.suggestion,
-            analysisSummary: data.result.analysisSummary,
-            currentPrompt: data.result.currentPrompt
-          });
-          setLoading(false);
-          setGepaJobId(null);
-          onImprovementGenerated?.();
-          return;
-        }
-        if (data.status === "failed" || data.status === "canceled") {
-          throw new Error(data.error?.message ?? "GEPA 最適化に失敗しました");
-        }
-
-        timer = setTimeout(() => {
-          void pollStatus();
-        }, GEPA_POLL_INTERVAL_MS);
-      } catch (e) {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : "GEPA ジョブの監視に失敗しました");
-        setLoading(false);
-        setGepaJobId(null);
-        setGepaJobStatus(null);
-      }
-    };
-
-    void pollStatus();
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [gepaJobId, onImprovementGenerated]);
-
   const handleGenerate = async () => {
-    const usesGepa = llmProvider === "ax" && axMethod === "gepa";
     setLoading(true);
     setImprovement(null);
     setError("");
     setPublishMessage(null);
-    setGepaJobId(null);
-    setGepaJobStatus(null);
     try {
-      if (usesGepa) {
-        const res = await fetch("/api/gepa-jobs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            kind: "judge",
-            domain: selectedDomain,
-            feedbackLimit: 10,
-            llmProvider,
-            axMethod
-          })
-        });
-        const data: unknown = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const err = data as { error?: { message?: string } };
-          throw new Error(err?.error?.message ?? "GEPA ジョブ投入に失敗しました");
-        }
-        if (!isGepaEnqueueResponse(data)) {
-          throw new Error("GEPA ジョブ投入の応答形式が不正です");
-        }
-        setGepaJobId(data.jobId);
-        setGepaJobStatus(data.status);
-        return;
-      }
-
       const res = await fetch("/api/judge-prompt/improve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -204,18 +101,15 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
       setImprovement({
         suggestion: data.suggestion,
         analysisSummary: data.analysisSummary,
-        currentPrompt: data.currentPrompt
+        currentPrompt: data.currentPrompt,
+        resultSource: data.resultSource,
+        degradedReason: data.degradedReason
       });
       onImprovementGenerated?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "改善案の生成に失敗しました");
-      setGepaJobId(null);
-      setGepaJobStatus(null);
-      setLoading(false);
     } finally {
-      if (!usesGepa) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
@@ -247,18 +141,15 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
   };
 
   const getJudgeImproveStatusMessage = (): string => {
-    if (loading && gepaJobId) {
-      if (gepaJobStatus === "queued") {
-        return "GEPA 最適化ジョブをキューに登録しました。順番待ちです...";
-      }
-      if (gepaJobStatus === "running") {
-        return "GEPA 最適化を実行中です...";
-      }
-      return "GEPA 最適化ジョブを準備中です...";
-    }
     if (loading) return "改善案を生成中です...";
     if (error) return error;
     if (publishMessage) return "Weave に反映しました。";
+    if (improvement?.resultSource === "gepa") {
+      return "GEPA 最適化結果を取得しました。Weave に反映するか、コピーしてご利用ください。";
+    }
+    if (improvement?.resultSource === "fallback") {
+      return "GEPA が失敗したため、通常生成で改善案を返しました。";
+    }
     if (improvement) return "改善案が生成されました。Weave に反映するか、コピーしてご利用ください。";
     if (weaveData === null) return "まず「Weave からデータを取得」を押してデータを取得してください。";
     if (weaveData.length === 0) return "取得したデータがありません。手動評価を蓄積してから再度取得してください。";
@@ -350,6 +241,12 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
 
       {improvement && (
         <div className="improvementResult">
+          {improvement.resultSource === "fallback" && (
+            <p className="hintText" style={{ marginBottom: 8 }}>
+              GEPA 実行に失敗したためフォールバック結果を表示しています。
+              {improvement.degradedReason ? ` (${improvement.degradedReason})` : ""}
+            </p>
+          )}
           <h3>分析サマリー</h3>
           <p>{improvement.analysisSummary}</p>
           {improvement.currentPrompt != null && improvement.currentPrompt !== "" ? (

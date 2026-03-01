@@ -34,7 +34,8 @@ describe("POST /api/target-prompt/improve", () => {
     ]);
     mockGenerateTargetPromptImprovement.mockResolvedValue({
       suggestion: "改善版の target instruction テキスト",
-      analysisSummary: "実績の数値化が不足している"
+      analysisSummary: "実績の数値化が不足している",
+      resultSource: "standard"
     });
   });
 
@@ -69,6 +70,7 @@ describe("POST /api/target-prompt/improve", () => {
     expect(response.status).toBe(200);
     expect(body.suggestion).toBe("改善版の target instruction テキスト");
     expect(body.analysisSummary).toBe("実績の数値化が不足している");
+    expect(body.resultSource).toBe("standard");
     expect(mockLoadTargetFailuresForPromptOptimization).toHaveBeenCalledWith(
       "resume_summary",
       10,

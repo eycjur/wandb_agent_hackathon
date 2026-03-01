@@ -180,7 +180,9 @@ export const JudgePromptImproveRequestSchema = z.object({
 export const JudgePromptImproveResponseSchema = z.object({
   suggestion: z.string(),
   analysisSummary: z.string(),
-  currentPrompt: z.string().optional()
+  currentPrompt: z.string().optional(),
+  resultSource: z.enum(["gepa", "fallback", "standard"]),
+  degradedReason: z.string().optional()
 });
 
 // 生成プロンプト改善
@@ -194,7 +196,9 @@ export const TargetPromptImproveRequestSchema = z.object({
 
 export const TargetPromptImproveResponseSchema = z.object({
   suggestion: z.string(),
-  analysisSummary: z.string()
+  analysisSummary: z.string(),
+  resultSource: z.enum(["gepa", "fallback", "standard"]),
+  degradedReason: z.string().optional()
 });
 
 // GEPA 非同期ジョブ
@@ -233,7 +237,9 @@ export const GepaJobStatusResponseSchema = z.object({
     .object({
       suggestion: z.string(),
       analysisSummary: z.string(),
-      currentPrompt: z.string().optional()
+      currentPrompt: z.string().optional(),
+      resultSource: z.enum(["gepa", "fallback", "standard"]).optional(),
+      degradedReason: z.string().optional()
     })
     .optional(),
   error: z
