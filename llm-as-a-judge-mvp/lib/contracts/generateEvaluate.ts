@@ -197,6 +197,53 @@ export const TargetPromptImproveResponseSchema = z.object({
   analysisSummary: z.string()
 });
 
+// GEPA 非同期ジョブ
+export const GepaJobKindSchema = z.enum(["judge", "target"]);
+export type GepaJobKind = z.infer<typeof GepaJobKindSchema>;
+
+export const GepaJobStatusSchema = z.enum(["queued", "running", "succeeded", "failed", "canceled"]);
+export type GepaJobStatus = z.infer<typeof GepaJobStatusSchema>;
+
+export const GepaJobEnqueueRequestSchema = z.object({
+  kind: GepaJobKindSchema,
+  domain: DomainIdSchema,
+  feedbackLimit: z.number().int().min(1).max(50).optional().default(10),
+  failedLimit: z.number().int().min(1).max(50).optional().default(10),
+  minScore: z.number().int().min(0).max(5).optional(),
+  llmProvider: LLMProviderSchema.optional().default("ax"),
+  axMethod: AxMethodSchema.optional().default("gepa")
+});
+
+export const GepaJobEnqueueResponseSchema = z.object({
+  jobId: z.string().min(1),
+  kind: GepaJobKindSchema,
+  domain: DomainIdSchema,
+  status: GepaJobStatusSchema
+});
+
+export const GepaJobStatusResponseSchema = z.object({
+  jobId: z.string().min(1),
+  kind: GepaJobKindSchema,
+  domain: DomainIdSchema,
+  status: GepaJobStatusSchema,
+  createdAt: z.string(),
+  startedAt: z.string().optional(),
+  finishedAt: z.string().optional(),
+  result: z
+    .object({
+      suggestion: z.string(),
+      analysisSummary: z.string(),
+      currentPrompt: z.string().optional()
+    })
+    .optional(),
+  error: z
+    .object({
+      code: z.string(),
+      message: z.string()
+    })
+    .optional()
+});
+
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 export type GenerateEvaluateRequest = z.infer<typeof GenerateEvaluateRequestSchema>;
 export type GenerateEvaluateSuccessResponse = z.infer<
@@ -218,3 +265,6 @@ export type JudgePromptImproveRequest = z.infer<typeof JudgePromptImproveRequest
 export type JudgePromptImproveResponse = z.infer<typeof JudgePromptImproveResponseSchema>;
 export type TargetPromptImproveRequest = z.infer<typeof TargetPromptImproveRequestSchema>;
 export type TargetPromptImproveResponse = z.infer<typeof TargetPromptImproveResponseSchema>;
+export type GepaJobEnqueueRequest = z.infer<typeof GepaJobEnqueueRequestSchema>;
+export type GepaJobEnqueueResponse = z.infer<typeof GepaJobEnqueueResponseSchema>;
+export type GepaJobStatusResponse = z.infer<typeof GepaJobStatusResponseSchema>;

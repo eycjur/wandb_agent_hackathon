@@ -19,6 +19,8 @@
   - `app/api/judge/route.ts`
   - `app/api/domain-config/route.ts`
   - `app/api/generate-evaluate/route.ts`（後方互換）
+  - `app/api/gepa-jobs/route.ts` - GEPA ジョブ投入
+  - `app/api/gepa-jobs/[jobId]/route.ts` - GEPA ジョブ状態取得
   - `app/api/weave/human-feedback/route.ts` - Weave 人間評価取得
   - `app/api/weave/judge-logs/route.ts` - Weave Judge ログ取得
   - `app/api/weave/debug/route.ts` - Weave 診断
@@ -45,6 +47,7 @@
 - 想定内エラーは `AppError` を使って返却する
 - 機密情報（`GEMINI_API_KEY`）をクライアントへ露出しない
 - Gemini APIの直接呼び出しは `GeminiProvider` に集約する
+- Judge/Target/GEPA の学習データ取得は `lib/application/promptOptimization/gepaDataLoader.ts` を再利用し、同一挙動を維持する
 
 ## 4. プロンプト/サンプル運用ルール
 - 現行ドメインは `resume_summary` / `resume_detail` / `self_pr`
@@ -84,7 +87,13 @@
 - Trace API の `op_name` はフル URI 形式のため、`op_names` フィルタではなく `query` の `$contains` を使用
 - domain フィルタは Trace API の `query` で `$getField("inputs.domain")` を指定
 
-## 9. 非目標（勝手に拡張しない）
+## 9. GEPA Queue の注意
+- GEPA キューは `lib/application/gepaJobService.ts` が担当し、状態は既定で `/tmp/llm-as-a-judge-mvp/gepa-jobs-state.json` に保存する
+- 復旧時は `running` を `queued` に戻して再実行する
+- `GEPA_JOB_STATE_FILE` を設定すると保存先を変更できる
+- この状態ファイルはジョブ制御用途であり、DB導入を意味しない（プロダクト履歴の永続化には使わない）
+
+## 10. 非目標（勝手に拡張しない）
 - 永続化（DB/履歴）追加
 - モデル設定UIの追加
 - 認証・認可の導入
