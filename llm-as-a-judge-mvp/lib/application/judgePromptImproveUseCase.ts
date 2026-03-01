@@ -5,6 +5,7 @@ import { generateTextForPromptImprovement } from "@/lib/infrastructure/promptImp
 import { optimizeJudgePromptWithGEPA } from "@/lib/infrastructure/ax/axGepaOptimizer";
 import type { HumanFeedbackRecord } from "@/lib/infrastructure/humanFeedbackStore";
 import type { AxMethodId, LLMProviderId } from "@/lib/contracts/generateEvaluate";
+import { getWeaveProjectId } from "@/lib/infrastructure/weave/weaveProjectId";
 import {
   GEPA_JUDGE_FAST_UI_BUDGET,
   GEPA_JUDGE_ULTRA_FAST_BUDGET
@@ -14,8 +15,8 @@ import {
   clearGepaFailureCooldown,
   getCachedGepaResult,
   getGepaFailureCooldownReason,
-  setGepaFailureCooldown,
-  setCachedGepaResult
+  setCachedGepaResult,
+  setGepaFailureCooldown
 } from "@/lib/application/promptOptimization/gepaResultCache";
 
 export interface JudgePromptImprovementResult {
@@ -49,6 +50,12 @@ function toDegradedReason(error: unknown): string {
   return "GEPA failure";
 }
 
+function mergeStageErrors(errors: unknown[]): string {
+  return errors
+    .map((error, index) => `stage${index + 1}: ${toDegradedReason(error)}`)
+    .join(" | ");
+}
+
 function buildJudgeGepaCachePayload(
   withJudgeResult: HumanFeedbackRecord[],
   promptConfig: Awaited<ReturnType<typeof getDomainPromptConfig>>
@@ -74,10 +81,16 @@ function buildJudgeGepaCachePayload(
   };
 }
 
-function mergeStageErrors(errors: unknown[]): string {
-  return errors
-    .map((error, index) => `stage${index + 1}: ${toDegradedReason(error)}`)
-    .join(" | ");
+function parseImprovementResponse(rawResponse: string): Pick<
+  JudgePromptImprovementResult,
+  "suggestion" | "analysisSummary"
+> {
+  const analysisMatch = rawResponse.match(/【分析サマリー】\s*([\s\S]*?)(?=【改善案】|$)/);
+  const suggestionMatch = rawResponse.match(/【改善案】\s*([\s\S]*?)$/);
+  return {
+    suggestion: suggestionMatch?.[1]?.trim() ?? rawResponse,
+    analysisSummary: analysisMatch?.[1]?.trim() ?? "分析結果を抽出できませんでした"
+  };
 }
 
 async function generateStandardJudgeImprovement(
@@ -85,7 +98,6 @@ async function generateStandardJudgeImprovement(
   promptConfig: Awaited<ReturnType<typeof getDomainPromptConfig>>,
   options: JudgePromptImproveOptions
 ): Promise<Pick<JudgePromptImprovementResult, "suggestion" | "analysisSummary">> {
-  // 乖離が大きいケースを優先（スコア差が2以上）
   const withDiscrepancy = withJudgeResult
     .map((r) => ({
       ...r,
@@ -138,20 +150,9 @@ ${examplesText}
     llmProvider: options.llmProvider,
     axMethod: options.axMethod
   });
-
-  const analysisMatch = rawResponse.match(/【分析サマリー】\s*([\s\S]*?)(?=【改善案】|$)/);
-  const suggestionMatch = rawResponse.match(/【改善案】\s*([\s\S]*?)$/);
-
-  const analysisSummary = analysisMatch?.[1]?.trim() ?? "分析結果を抽出できませんでした";
-  const suggestion = suggestionMatch?.[1]?.trim() ?? rawResponse;
-
-  return { suggestion, analysisSummary };
+  return parseImprovementResponse(rawResponse);
 }
 
-/**
- * 人間評価に基づいて Judge プロンプトの改善案を LLM で生成する
- * 乖離が大きいケース（Judge と人間のスコア差が 2 以上）を優先的に分析
- */
 export async function generateJudgePromptImprovement(
   feedbackRecords: HumanFeedbackRecord[],
   domain: DomainId,
@@ -185,6 +186,7 @@ export async function generateJudgePromptImprovement(
         resultSource: "gepa"
       };
     }
+
     const cooldownReason = getGepaFailureCooldownReason(cacheKey);
     if (cooldownReason) {
       const fallbackResult = await generateStandardJudgeImprovement(
@@ -240,6 +242,37 @@ export async function generateJudgePromptImprovement(
       degradedReason: mergedStageErrors
     };
   }
+
+  if (options.llmProvider === "gemini") {
+    if (!process.env.WANDB_API_KEY) {
+      throw new AppError(
+        500,
+        "CONFIG_ERROR",
+        "サーバー設定エラーが発生しました。",
+        "Gemini プロバイダを利用するには WANDB_API_KEY 環境変数を設定してください。"
+      );
+    }
+    const projectId = await getWeaveProjectId();
+    if (!projectId) {
+      throw new AppError(
+        500,
+        "CONFIG_ERROR",
+        "サーバー設定エラーが発生しました。",
+        "Could not resolve W&B project ID. Set WANDB_ENTITY and WANDB_PROJECT env vars."
+      );
+    }
+    const mcpPrompt = buildMcpPrompt(domain, projectId, promptConfig);
+    const rawResponse = await generateTextForPromptImprovement(mcpPrompt, {
+      llmProvider: "gemini"
+    });
+    const parsed = parseImprovementResponse(rawResponse);
+    return {
+      ...parsed,
+      currentPrompt: promptConfig.judgeInstruction,
+      resultSource: "standard"
+    };
+  }
+
   const standardResult = await generateStandardJudgeImprovement(
     withJudgeResult,
     promptConfig,
@@ -250,4 +283,45 @@ export async function generateJudgePromptImprovement(
     currentPrompt: promptConfig.judgeInstruction,
     resultSource: "standard"
   };
+}
+
+/**
+ * W&B MCP Server 経由で Gemini が Weave データを自律取得するためのプロンプトを構築する。
+ * データをプロンプトに埋め込む代わりに、MCP ツールでの取得を指示する。
+ */
+function buildMcpPrompt(
+  domain: DomainId,
+  projectId: string,
+  promptConfig: Awaited<ReturnType<typeof getDomainPromptConfig>>
+): string {
+  return `あなたは LLM の評価プロンプト（Judge）を改善する専門家です。
+W&B Weave に保存された評価データを MCP ツールで取得・分析し、Judge プロンプトの改善案を提案してください。
+
+## 対象プロジェクト
+W&B プロジェクト: **${projectId}**
+
+## 手順
+1. \`query_weave_traces_tool\` を使い、op_name に "human_feedback_log" を含むトレースを取得する。取得されたデータを「人間の評価」と呼ぶ。
+2. \`query_weave_traces_tool\` を使い、op_name に "judge_log" を含むトレースを取得する。取得されたデータを「LLMの評価」と呼ぶ。
+3. domain が "${domain}" のデータに絞り込む
+4. 「人間の評価」と「LLMの評価」が乖離しているものを特定する
+5. 乖離パターンを分析し、以下の現在の Judge プロンプトと照合して改善案を提案する
+
+## 現在の Judge プロンプト（instruction_template）
+
+${promptConfig.judgeInstruction}
+
+## 現在のルーブリック
+
+${promptConfig.judgeRubric.map((r) => `- ${r}`).join("\n")}
+
+## 出力形式
+
+以下の形式で回答してください。改善案は具体的に、YAML の judge.instruction_template にそのまま反映できる形で書いてください。
+
+【分析サマリー】
+（乖離のパターンや原因を2〜3文で）
+
+【改善案】
+（judge.instruction_template の改善版テキスト。コードブロックは使わず、そのままコピペできる形で）`;
 }

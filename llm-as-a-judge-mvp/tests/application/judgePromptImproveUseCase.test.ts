@@ -1,16 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppError } from "@/lib/errors";
 
 const mockGetDomainPromptConfig = vi.fn();
 const mockGenerateTextForPromptImprovement = vi.fn();
 const mockOptimizeJudgePromptWithGEPA = vi.fn();
+const mockGetWeaveProjectId = vi.fn();
 
 vi.mock("@/lib/config/domainPromptLoader", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@/lib/config/domainPromptLoader")>();
   return {
     ...actual,
-    getDomainPromptConfig: (...args: unknown[]) => mockGetDomainPromptConfig(...args)
+    getDomainPromptConfig: (...args: unknown[]) =>
+      mockGetDomainPromptConfig(...args)
   };
 });
 
@@ -22,6 +24,10 @@ vi.mock("@/lib/infrastructure/promptImproveGenerator", () => ({
 vi.mock("@/lib/infrastructure/ax/axGepaOptimizer", () => ({
   optimizeJudgePromptWithGEPA: (...args: unknown[]) =>
     mockOptimizeJudgePromptWithGEPA(...args)
+}));
+
+vi.mock("@/lib/infrastructure/weave/weaveProjectId", () => ({
+  getWeaveProjectId: (...args: unknown[]) => mockGetWeaveProjectId(...args)
 }));
 
 const feedbackRecords = [
@@ -55,6 +61,8 @@ const feedbackRecords = [
 ];
 
 describe("generateJudgePromptImprovement", () => {
+  const originalWandbApiKey = process.env.WANDB_API_KEY;
+
   beforeEach(async () => {
     vi.clearAllMocks();
     const { clearGepaResultCacheForTest } = await import(
@@ -68,6 +76,15 @@ describe("generateJudgePromptImprovement", () => {
       judgeRubric: ["観点A", "観点B"],
       passThreshold: 4
     });
+    mockGetWeaveProjectId.mockResolvedValue("entity/project");
+  });
+
+  afterEach(() => {
+    if (originalWandbApiKey === undefined) {
+      delete process.env.WANDB_API_KEY;
+    } else {
+      process.env.WANDB_API_KEY = originalWandbApiKey;
+    }
   });
 
   it("ax/gepa成功時はGEPA結果を返す", async () => {
@@ -188,5 +205,23 @@ describe("generateJudgePromptImprovement", () => {
 
     expect(result.resultSource).toBe("standard");
     expect(result.suggestion).toBe("standard suggestion");
+  });
+
+  it("gemini プロバイダで WANDB_API_KEY が未設定の場合 CONFIG_ERROR(500) を投げる", async () => {
+    delete process.env.WANDB_API_KEY;
+
+    const { generateJudgePromptImprovement } = await import(
+      "@/lib/application/judgePromptImproveUseCase"
+    );
+
+    const error = await generateJudgePromptImprovement(
+      feedbackRecords,
+      "resume_summary",
+      { llmProvider: "gemini" }
+    ).catch((e) => e);
+
+    expect(error).toBeInstanceOf(AppError);
+    expect(error.status).toBe(500);
+    expect(error.code).toBe("CONFIG_ERROR");
   });
 });
