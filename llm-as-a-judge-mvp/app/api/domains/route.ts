@@ -9,17 +9,10 @@ const DOMAIN_LABELS: Record<DomainId, string> = {
   self_pr: "自己PR"
 };
 
-const DOMAIN_FILES: Record<DomainId, string> = {
-  resume_summary: "prompts/resume_summary.yml",
-  resume_detail: "prompts/resume_detail.yml",
-  self_pr: "prompts/self_pr.yml"
-};
-
 export async function GET() {
   const domains = SUPPORTED_DOMAINS.map((id) => ({
     id,
-    label: DOMAIN_LABELS[id],
-    promptFile: DOMAIN_FILES[id]
+    label: DOMAIN_LABELS[id]
   }));
 
   const response = DomainsListResponseSchema.parse({ domains });

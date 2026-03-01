@@ -72,9 +72,24 @@ body {
   gap: 20px;
 }
 
+.pageTitle {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.pageSubtitle {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
 /* ── Hero ──────────────────────────────────────── */
 .hero {
-  padding: 8px 4px 4px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 20px 20px;
 }
 
 .kicker {
@@ -116,6 +131,61 @@ body {
   border-radius: var(--radius-md);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+}
+
+.axMethodRow {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.axMethodRow .domainSelectorLabel {
+  margin: 0;
+}
+
+/* ── Prompt Improve Layout（LLMオプション右側） ──────────────────────────── */
+.promptImproveLayout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.promptImproveLayout > section {
+  flex: 1;
+  min-width: 0;
+}
+
+.promptImproveOptions {
+  flex-shrink: 0;
+  width: 200px;
+  padding: 16px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.promptImproveOptions h3 {
+  margin: 0 0 12px 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.promptImproveOptions .domainSelectorButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.promptImproveOptions .axMethodRow {
+  margin-top: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.promptImproveOptions .axMethodRow .domainSelectorButtons {
+  width: 100%;
 }
 
 .domainSelectorLabel {
@@ -636,6 +706,217 @@ h2:focus-visible,
   grid-template-columns: minmax(340px, 1fr) minmax(340px, 1fr);
   gap: 18px;
   align-items: start;
+}
+
+/* ── Human Feedback Panel ──────────────────────── */
+.humanFeedbackPanel {
+  margin-top: 8px;
+}
+
+.humanFeedbackPanel h2 {
+  margin-bottom: 6px;
+}
+
+.humanFeedbackForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.scoreInputRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.scoreInputLabel {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.scoreButtons {
+  display: flex;
+  gap: 6px;
+}
+
+.scoreButton {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.scoreButton:hover {
+  background: var(--glass-strong);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.scoreButton.active {
+  background: var(--accent-gradient);
+  color: #0b1120;
+  border-color: transparent;
+}
+
+.commentRow label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.commentTextarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.commentTextarea:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.agreeRow label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.agreeRow input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.humanFeedbackList {
+  margin-top: 8px;
+}
+
+.humanFeedbackList summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.feedbackList {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feedbackItem {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+
+.feedbackMeta {
+  display: block;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.feedbackComment {
+  display: block;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.wandbHint {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 212, 170, 0.08);
+  border: 1px solid rgba(0, 212, 170, 0.2);
+  color: var(--accent-cyan);
+  font-size: 0.85rem;
+}
+
+.wandbHint .wandbLink {
+  color: var(--accent-cyan);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.wandbHint .wandbLink:hover {
+  color: #fff;
+}
+
+/* ── Judge プロンプト改善 ───────────────────────── */
+.promptImprovePanel {
+  margin-top: 8px;
+}
+
+.promptImprovePanel h2 {
+  margin-bottom: 6px;
+}
+
+.promptImprovePanel .primaryButton {
+  margin-top: 10px;
+}
+
+.improvementResult {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.improvementResult h3 {
+  margin: 14px 0 6px;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.improvementResult h3:first-child {
+  margin-top: 0;
+}
+
+.improvementSuggestion {
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: 0.88rem;
+}
+
+/* ── Weave Prompt Panel ──────────────────────── */
+.weavePromptPanel {
+  margin-top: 20px;
+}
+
+.weavePromptPanel h2 {
+  margin-bottom: 6px;
+}
+
+.weavePromptPanel .primaryButton {
+  margin-top: 10px;
+}
+
+.syncSuccessMessage {
+  margin-top: 10px;
+  color: var(--success, #22c55e);
+  font-size: 0.9rem;
 }
 
 /* ── Result Cards ─────────────────────────────── */

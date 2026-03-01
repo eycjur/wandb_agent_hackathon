@@ -1,4 +1,10 @@
 import type { DomainId } from "@/lib/config/domainPromptLoader";
+import type { AxMethodId, LLMProviderId } from "@/lib/contracts/generateEvaluate";
+
+export type LLMProviderOptions = {
+  llmProvider?: LLMProviderId;
+  axMethod?: AxMethodId;
+};
 
 export type JudgeResult = {
   score: number;

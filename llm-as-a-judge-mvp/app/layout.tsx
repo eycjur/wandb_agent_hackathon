@@ -27,7 +27,16 @@ export default function RootLayout({
         />
         <meta name="theme-color" content="#0b1120" />
       </head>
-      <body>{children}</body>
+      <body>
+        <header className="hero">
+          <p className="kicker">Recruiting Assistant</p>
+          <h1>職務経歴書アシスタント</h1>
+          <p className="subtitle">
+            職務経歴テキストから要約・職務経歴詳細・自己PRを生成し、LLMで評価します。
+          </p>
+        </header>
+        {children}
+      </body>
     </html>
   );
 }

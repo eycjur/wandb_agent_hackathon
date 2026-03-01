@@ -11,15 +11,5 @@ export default defineConfig({
       "@": path.resolve(__dirname, "."),
       "server-only": path.resolve(__dirname, "tests/mocks/server-only.ts")
     }
-  },
-  plugins: [
-    {
-      name: "yaml-raw",
-      transform(code, id) {
-        if (id.endsWith(".yml") || id.endsWith(".yaml")) {
-          return { code: `export default ${JSON.stringify(code)}`, map: null };
-        }
-      }
-    }
-  ]
+  }
 });

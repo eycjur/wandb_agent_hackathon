@@ -9,3 +9,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .DS_Store
+
+# ローカルデータ（人間評価・評価ログ）
+data/evaluation_logs.json
