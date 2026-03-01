@@ -8,6 +8,10 @@ import { getDomainPromptConfig } from "@/lib/config/domainPromptLoader";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
 import { JUDGE_MODEL, MODEL_TIMEOUT_MS, TARGET_MODEL } from "@/lib/config/llm";
 import type { EvaluationLogRecord } from "@/lib/infrastructure/evaluationLogStore";
+import {
+  calculateTargetGepaMetric,
+  type TargetGepaMetricExample
+} from "@/lib/application/promptOptimization/gepaMetrics";
 
 export interface GepaTargetOptimizationResult {
   suggestion: string;
@@ -64,7 +68,9 @@ export async function optimizeTargetPromptWithGEPA(
 
   const examples = failedRecords.slice(0, 12).map((r) => ({
     userInput: r.userInput,
-    passThreshold: r.judgeResult.passThreshold
+    passThreshold: r.judgeResult.passThreshold,
+    baselineScore: r.judgeResult.score,
+    domain
   }));
 
   const targetAI = ai({
@@ -83,9 +89,8 @@ export async function optimizeTargetPromptWithGEPA(
     const output = (arg.prediction as { generatedOutput?: string })?.generatedOutput?.trim();
     if (!output) return 0;
 
-    const ex = arg.example as { userInput?: string; passThreshold?: number };
+    const ex = arg.example as TargetGepaMetricExample;
     const userInput = ex?.userInput ?? "";
-    const passThreshold = Number(ex?.passThreshold ?? 4);
 
     try {
       const judgeResult = await judgeProgram.forward(
@@ -93,9 +98,12 @@ export async function optimizeTargetPromptWithGEPA(
         { userInput, generatedOutput: output },
         { stream: false }
       );
-      const score = Number(judgeResult.score ?? 0);
-      const normalized = score / Math.max(passThreshold, 1);
-      return Math.min(normalized, 1);
+      return calculateTargetGepaMetric(judgeResult.score, output, {
+        userInput,
+        passThreshold: Number(ex?.passThreshold ?? 4),
+        baselineScore: Number(ex?.baselineScore ?? 0),
+        domain: ex?.domain ?? domain
+      });
     } catch {
       return 0;
     }
