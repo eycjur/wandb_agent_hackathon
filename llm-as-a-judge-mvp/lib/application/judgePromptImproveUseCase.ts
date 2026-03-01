@@ -169,18 +169,25 @@ function buildMcpPrompt(
   projectId: string,
   promptConfig: Awaited<ReturnType<typeof getDomainPromptConfig>>,
 ): string {
-  return `あなたは LLM の評価プロンプト（Judge）を改善する専門家です。
+  return `あなたは LLM の評価プロンプト（Judge）を改善する専門家です。Judgeプロンプトを多数改善した経験があり、LLMの評価傾向と人間の感覚の乖離を体系的に分析することが得意です。
 W&B Weave に保存された評価データを MCP ツールで取得・分析し、Judge プロンプトの改善案を提案してください。
 
 ## 対象プロジェクト
 W&B プロジェクト: **${projectId}**
 
-## 手順
-1. \`query_weave_traces_tool\` を使い、op_name に "human_feedback_log" を含むトレースを取得する。取得されたデータを「人間の評価」と呼ぶ。
-2. \`query_weave_traces_tool\` を使い、op_name に "judge_log" を含むトレースを取得する。取得されたデータを「LLMの評価」と呼ぶ。
-3. domain が "${domain}" のデータに絞り込む
-4. 「人間の評価」と「LLMの評価」が乖離しているものを特定する
-5. 乖離パターンを分析し、以下の現在の Judge プロンプトと照合して改善案を提案する
+## 分析手順
+1. \`query_weave_traces_tool\` を使い、op_name に "human_feedback_log" を含むトレースを取得する。
+   取得されたデータのうち、 "humanScore" と "humanComment" を「人間の評価」、 "judgeScore" と "judgeResult.reason" を「LLMの評価」と呼ぶ。
+2. domain が "${domain}" のデータに絞り込む
+3. 取得したデータのスコア差の分布（最小・最大・平均・中央値）やhumanComment, judgeResult.reasonを確認し、データの実態に基づいて「乖離」とみなす基準を自身で設定する。その基準と選定理由を分析サマリーに明記する。
+5. 設定した乖離基準を満たすケースを抽出する。過大評価（LLM > 人間）と過小評価（LLM < 人間）が偏らないよう代表的なサンプルを選ぶ（最大20件）。
+6. 抽出したケースを以下の観点で分類・分析する:
+   - Judge が過大評価するパターン（どんな出力特徴が高スコアを引き起こすか）
+   - Judge が過小評価するパターン（どんな出力特徴が低スコアを引き起こすか）
+   - 文体・表現への依存（内容ではなく言い回しでスコアが変わるケース）
+   - ルーブリックの特定項目への偏重（一部観点だけで総合判断している疑い）
+7. 分析結果をもとに、現在の Judge プロンプトの問題箇所を特定し、改善アクションを導出する
+8. 改善アクションを反映した改善案を1つ生成する
 
 ## 現在の Judge プロンプト（instruction_template）
 
@@ -193,9 +200,10 @@ ${promptConfig.judgeRubric.map((r) => `- ${r}`).join("\n")}
 ## 出力形式
 
 以下の形式で回答してください。改善案は具体的に、YAML の judge.instruction_template にそのまま反映できる形で書いてください。
+何らかの原因で分析サマリーと改善案を回答できない場合は、分析サマリーに理由を書いて、改善案には instruction_template をそのまま出力してください。
 
 【分析サマリー】
-（乖離のパターンや原因を2〜3文で）
+（乖離基準とその設定根拠、観点別の乖離パターンを複数列挙して分析する。Judge プロンプトのどの部分が原因かも特定する）
 
 【改善案】
 （judge.instruction_template の改善版テキスト。コードブロックは使わず、そのままコピペできる形で）`;
