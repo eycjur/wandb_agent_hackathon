@@ -77,9 +77,10 @@ export async function generateTextWithWandbMcp(
   try {
     console.log("[geminiMcpGenerator] connecting to W&B MCP server...");
     try {
-      await mcpClient.connect(transport);
+      await Promise.race([mcpClient.connect(transport), timeoutPromise]);
     } catch (connectErr) {
       if (timer) clearTimeout(timer);
+      if (connectErr instanceof AppError) throw connectErr;
       console.error(
         "[geminiMcpGenerator] failed to connect to W&B MCP server:",
         connectErr,
