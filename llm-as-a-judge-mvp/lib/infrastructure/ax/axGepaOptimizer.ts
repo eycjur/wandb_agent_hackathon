@@ -8,6 +8,11 @@ import { getDomainPromptConfig } from "@/lib/config/domainPromptLoader";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
 import { JUDGE_MODEL, MODEL_TIMEOUT_MS } from "@/lib/config/llm";
 import type { HumanFeedbackRecord } from "@/lib/infrastructure/humanFeedbackStore";
+import {
+  buildRubricKeywords,
+  calculateJudgeGepaMetric,
+  type JudgeGepaMetricExample
+} from "@/lib/infrastructure/ax/gepaMetrics";
 
 export interface GepaJudgeOptimizationResult {
   suggestion: string;
@@ -52,22 +57,28 @@ export async function optimizeJudgePromptWithGEPA(
     { description: descriptionParts.join("\n") }
   );
 
+  const rubricKeywords = buildRubricKeywords(promptConfig.judgeRubric);
+
   const examples = withJudgeResult.slice(0, 15).map((r) => ({
     userInput: r.userInput,
     generatedOutput: r.generatedOutput,
-    humanScore: r.humanScore
+    humanScore: r.humanScore,
+    passThreshold: promptConfig.passThreshold,
+    humanComment: r.humanComment
   }));
 
   const metricFn = (arg: Readonly<{ prediction: unknown; example: unknown }>): number => {
-    const pred = arg.prediction as { score?: number };
-    const ex = arg.example as { humanScore?: number };
-    const predScore = Number(pred?.score ?? 0);
-    const humanScore = Number(ex?.humanScore ?? 0);
-    const diff = Math.abs(predScore - humanScore);
-    if (diff === 0) return 1;
-    if (diff === 1) return 0.6;
-    if (diff === 2) return 0.2;
-    return 0;
+    const pred = arg.prediction as { score?: unknown; reason?: unknown };
+    const ex = arg.example as JudgeGepaMetricExample;
+    return calculateJudgeGepaMetric(
+      { score: pred?.score, reason: pred?.reason },
+      {
+        humanScore: Number(ex?.humanScore ?? 0),
+        passThreshold: Number(ex?.passThreshold ?? promptConfig.passThreshold),
+        humanComment: ex?.humanComment
+      },
+      rubricKeywords
+    );
   };
 
   const studentAI = ai({
