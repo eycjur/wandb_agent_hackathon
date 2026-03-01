@@ -141,6 +141,9 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
     if (error) return error;
     if (publishMessage) return "Weave に反映しました。";
     if (improvement) return "改善案が生成されました。Weave に反映するか、コピーしてご利用ください。";
+    if (llmProvider === "gemini") {
+      return "Gemini はデータを自動取得して改善案を生成します。「改善案を生成」を押してください。";
+    }
     if (weaveData === null) return "まず「Weave からデータを取得」を押してデータを取得してください。";
     if (weaveData.length === 0) return "取得したデータがありません。手動評価を蓄積してから再度取得してください。";
     return "データを取得しました。「改善案を生成」を押して Judge プロンプトの改善案を生成します。";
@@ -167,8 +170,8 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
           type="button"
           className="primaryButton"
           onClick={handleGenerate}
-          disabled={loading || weaveData === null}
-          title={weaveData === null ? "まず「Weave からデータを取得」を実行してください" : undefined}
+          disabled={loading || (llmProvider !== "gemini" && weaveData === null)}
+          title={llmProvider !== "gemini" && weaveData === null ? "まず「Weave からデータを取得」を実行してください" : undefined}
         >
           {loading ? "生成中..." : "改善案を生成"}
         </button>
