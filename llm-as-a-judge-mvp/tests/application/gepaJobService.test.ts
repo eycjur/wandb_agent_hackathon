@@ -145,6 +145,227 @@ describe("GepaJobService", () => {
     );
   });
 
+  it("復元時に範囲外のlimit/minScoreジョブは破棄する", async () => {
+    const stateFilePath = createTempStateFilePath();
+    writeFileSync(
+      stateFilePath,
+      JSON.stringify({
+        jobs: [
+          {
+            jobId: "job_invalid_feedback",
+            kind: "target",
+            domain: "resume_summary",
+            status: "queued",
+            llmProvider: "ax",
+            axMethod: "gepa",
+            feedbackLimit: 999,
+            failedLimit: 10,
+            minScore: 3,
+            createdAt: "2026-03-01T00:00:00.000Z"
+          },
+          {
+            jobId: "job_invalid_failed",
+            kind: "target",
+            domain: "resume_summary",
+            status: "queued",
+            llmProvider: "ax",
+            axMethod: "gepa",
+            feedbackLimit: 10,
+            failedLimit: 0,
+            minScore: 3,
+            createdAt: "2026-03-01T00:00:00.000Z"
+          },
+          {
+            jobId: "job_invalid_min_score",
+            kind: "target",
+            domain: "resume_summary",
+            status: "queued",
+            llmProvider: "ax",
+            axMethod: "gepa",
+            feedbackLimit: 10,
+            failedLimit: 10,
+            minScore: 6,
+            createdAt: "2026-03-01T00:00:00.000Z"
+          },
+          {
+            jobId: "job_valid_boundary",
+            kind: "target",
+            domain: "resume_summary",
+            status: "queued",
+            llmProvider: "ax",
+            axMethod: "gepa",
+            feedbackLimit: 50,
+            failedLimit: 1,
+            minScore: 0,
+            createdAt: "2026-03-01T00:00:00.000Z"
+          }
+        ],
+        queue: [
+          "job_invalid_feedback",
+          "job_invalid_failed",
+          "job_invalid_min_score",
+          "job_valid_boundary"
+        ]
+      }),
+      "utf8"
+    );
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const loadTargetFailures = vi.fn<
+      NonNullable<GepaJobServiceOptions["loadTargetFailures"]>
+    >(async () => [
+      {
+        id: "e2",
+        domain: "resume_summary",
+        userInput: "input",
+        generatedOutput: "output",
+        judgeResult: {
+          score: 2,
+          reason: "bad",
+          pass: false,
+          passThreshold: 4,
+          rubricVersion: 1
+        },
+        createdAt: "2024-01-01T00:00:00.000Z"
+      }
+    ]);
+    const optimizeTarget = vi.fn<
+      NonNullable<GepaJobServiceOptions["optimizeTarget"]>
+    >(async () => ({
+      suggestion: "optimized target prompt",
+      analysisSummary: "analysis",
+      resultSource: "gepa"
+    }));
+
+    try {
+      const service = new GepaJobService({
+        stateFilePath,
+        loadTargetFailures,
+        optimizeTarget
+      });
+
+      await waitFor(() => service.getById("job_valid_boundary")?.status === "succeeded");
+
+      expect(service.getById("job_invalid_feedback")).toBeNull();
+      expect(service.getById("job_invalid_failed")).toBeNull();
+      expect(service.getById("job_invalid_min_score")).toBeNull();
+      expect(loadTargetFailures).toHaveBeenCalledWith("resume_summary", 1, 0);
+      expect(optimizeTarget).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("job_invalid_feedback")
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("job_invalid_failed")
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("job_invalid_min_score")
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("復元時に境界値のジョブは受け入れて再実行できる", async () => {
+    const stateFilePath = createTempStateFilePath();
+    writeFileSync(
+      stateFilePath,
+      JSON.stringify({
+        jobs: [
+          {
+            jobId: "job_judge_boundary",
+            kind: "judge",
+            domain: "resume_summary",
+            status: "queued",
+            llmProvider: "ax",
+            axMethod: "gepa",
+            feedbackLimit: 50,
+            failedLimit: 1,
+            minScore: 5,
+            createdAt: "2026-03-01T00:00:00.000Z"
+          },
+          {
+            jobId: "job_target_boundary",
+            kind: "target",
+            domain: "resume_summary",
+            status: "queued",
+            llmProvider: "ax",
+            axMethod: "gepa",
+            feedbackLimit: 1,
+            failedLimit: 50,
+            minScore: 5,
+            createdAt: "2026-03-01T00:00:00.000Z"
+          }
+        ],
+        queue: ["job_judge_boundary", "job_target_boundary"]
+      }),
+      "utf8"
+    );
+
+    const loadJudgeFeedback = vi.fn<
+      NonNullable<GepaJobServiceOptions["loadJudgeFeedback"]>
+    >(async () => [
+      {
+        id: "hf_2",
+        domain: "resume_summary",
+        userInput: "input",
+        generatedOutput: "output",
+        judgeResult: { score: 3, reason: "ok", pass: false },
+        humanScore: 2,
+        humanComment: "comment",
+        createdAt: "2024-01-01T00:00:00.000Z"
+      }
+    ]);
+    const optimizeJudge = vi.fn<
+      NonNullable<GepaJobServiceOptions["optimizeJudge"]>
+    >(async () => ({
+      suggestion: "optimized judge prompt",
+      analysisSummary: "analysis",
+      currentPrompt: "current prompt",
+      resultSource: "gepa"
+    }));
+    const loadTargetFailures = vi.fn<
+      NonNullable<GepaJobServiceOptions["loadTargetFailures"]>
+    >(async () => [
+      {
+        id: "e3",
+        domain: "resume_summary",
+        userInput: "input",
+        generatedOutput: "output",
+        judgeResult: {
+          score: 2,
+          reason: "bad",
+          pass: false,
+          passThreshold: 4,
+          rubricVersion: 1
+        },
+        createdAt: "2024-01-01T00:00:00.000Z"
+      }
+    ]);
+    const optimizeTarget = vi.fn<
+      NonNullable<GepaJobServiceOptions["optimizeTarget"]>
+    >(async () => ({
+      suggestion: "optimized target prompt",
+      analysisSummary: "analysis",
+      resultSource: "gepa"
+    }));
+
+    const service = new GepaJobService({
+      stateFilePath,
+      loadJudgeFeedback,
+      optimizeJudge,
+      loadTargetFailures,
+      optimizeTarget
+    });
+
+    await waitFor(() => service.getById("job_judge_boundary")?.status === "succeeded");
+    await waitFor(() => service.getById("job_target_boundary")?.status === "succeeded");
+
+    expect(loadJudgeFeedback).toHaveBeenCalledWith("resume_summary", 50);
+    expect(loadTargetFailures).toHaveBeenCalledWith("resume_summary", 50, 5);
+    expect(optimizeJudge).toHaveBeenCalledTimes(1);
+    expect(optimizeTarget).toHaveBeenCalledTimes(1);
+  });
+
   it("ax/gepa以外はenqueue時にVALIDATION_ERRORを投げる", () => {
     const service = new GepaJobService({
       stateFilePath: createTempStateFilePath()

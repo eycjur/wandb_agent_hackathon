@@ -29,6 +29,10 @@ import {
 
 const MAX_JOBS = 200;
 const DEFAULT_CONCURRENCY = 1;
+const MIN_RECORD_LIMIT = 1;
+const MAX_RECORD_LIMIT = 50;
+const MIN_MIN_SCORE = 0;
+const MAX_MIN_SCORE = 5;
 const VALID_DOMAINS: DomainId[] = ["resume_summary", "resume_detail", "self_pr"];
 const VALID_KINDS: GepaJobKind[] = ["judge", "target"];
 const VALID_STATUSES: GepaJobStatus[] = [
@@ -69,6 +73,16 @@ type GepaJobStatePayload = {
   jobs: GepaJobRecord[];
   queue: string[];
 };
+
+type PersistedJobParseResult =
+  | {
+      job: GepaJobRecord;
+    }
+  | {
+      job: null;
+      reason: string;
+      jobId?: string;
+    };
 
 export type GepaJobServiceOptions = {
   concurrency?: number;
@@ -127,8 +141,14 @@ function toJobError(error: unknown): GepaJobError {
   };
 }
 
-function toPersistedJobRecord(raw: unknown): GepaJobRecord | null {
-  if (!isObject(raw)) return null;
+function isIntegerInRange(value: number, min: number, max: number): boolean {
+  return Number.isInteger(value) && value >= min && value <= max;
+}
+
+function toPersistedJobRecord(raw: unknown): PersistedJobParseResult {
+  if (!isObject(raw)) {
+    return { job: null, reason: "payload is not an object" };
+  }
 
   const jobId = typeof raw.jobId === "string" ? raw.jobId : "";
   const kind = raw.kind;
@@ -178,31 +198,68 @@ function toPersistedJobRecord(raw: unknown): GepaJobRecord | null {
       ? { code: raw.error.code, message: raw.error.message }
       : undefined;
 
-  if (!jobId) return null;
-  if (!VALID_KINDS.includes(kind as GepaJobKind)) return null;
-  if (!VALID_DOMAINS.includes(domain as DomainId)) return null;
-  if (!VALID_STATUSES.includes(status as GepaJobStatus)) return null;
-  if (!VALID_PROVIDERS.includes(llmProvider as LLMProviderId)) return null;
-  if (!VALID_AX_METHODS.includes(axMethod as AxMethodId)) return null;
-  if (!Number.isFinite(feedbackLimit) || feedbackLimit < 1) return null;
-  if (!Number.isFinite(failedLimit) || failedLimit < 1) return null;
-  if (!createdAt) return null;
+  const jobIdForLog = jobId || undefined;
+  if (!jobId) return { job: null, reason: "missing jobId" };
+  if (!VALID_KINDS.includes(kind as GepaJobKind)) {
+    return { job: null, jobId: jobIdForLog, reason: "invalid kind" };
+  }
+  if (!VALID_DOMAINS.includes(domain as DomainId)) {
+    return { job: null, jobId: jobIdForLog, reason: "invalid domain" };
+  }
+  if (!VALID_STATUSES.includes(status as GepaJobStatus)) {
+    return { job: null, jobId: jobIdForLog, reason: "invalid status" };
+  }
+  if (!VALID_PROVIDERS.includes(llmProvider as LLMProviderId)) {
+    return { job: null, jobId: jobIdForLog, reason: "invalid llmProvider" };
+  }
+  if (!VALID_AX_METHODS.includes(axMethod as AxMethodId)) {
+    return { job: null, jobId: jobIdForLog, reason: "invalid axMethod" };
+  }
+  if (!isIntegerInRange(feedbackLimit, MIN_RECORD_LIMIT, MAX_RECORD_LIMIT)) {
+    return {
+      job: null,
+      jobId: jobIdForLog,
+      reason: `feedbackLimit out of range: ${feedbackLimit}`
+    };
+  }
+  if (!isIntegerInRange(failedLimit, MIN_RECORD_LIMIT, MAX_RECORD_LIMIT)) {
+    return {
+      job: null,
+      jobId: jobIdForLog,
+      reason: `failedLimit out of range: ${failedLimit}`
+    };
+  }
+  if (
+    minScore != null &&
+    !isIntegerInRange(minScore, MIN_MIN_SCORE, MAX_MIN_SCORE)
+  ) {
+    return {
+      job: null,
+      jobId: jobIdForLog,
+      reason: `minScore out of range: ${minScore}`
+    };
+  }
+  if (!createdAt) {
+    return { job: null, jobId: jobIdForLog, reason: "missing createdAt" };
+  }
 
   return {
-    jobId,
-    kind: kind as GepaJobKind,
-    domain: domain as DomainId,
-    status: status as GepaJobStatus,
-    llmProvider: llmProvider as LLMProviderId,
-    axMethod: axMethod as AxMethodId,
-    feedbackLimit,
-    failedLimit,
-    minScore,
-    createdAt,
-    startedAt,
-    finishedAt,
-    result,
-    error
+    job: {
+      jobId,
+      kind: kind as GepaJobKind,
+      domain: domain as DomainId,
+      status: status as GepaJobStatus,
+      llmProvider: llmProvider as LLMProviderId,
+      axMethod: axMethod as AxMethodId,
+      feedbackLimit,
+      failedLimit,
+      minScore,
+      createdAt,
+      startedAt,
+      finishedAt,
+      result,
+      error
+    }
   };
 }
 
@@ -268,6 +325,18 @@ export class GepaJobService {
         400,
         "VALIDATION_ERROR",
         "GEPA ジョブは llmProvider=ax かつ axMethod=gepa でのみ実行できます。"
+      );
+    }
+    if (
+      !isIntegerInRange(input.feedbackLimit, MIN_RECORD_LIMIT, MAX_RECORD_LIMIT) ||
+      !isIntegerInRange(input.failedLimit, MIN_RECORD_LIMIT, MAX_RECORD_LIMIT) ||
+      (input.minScore != null &&
+        !isIntegerInRange(input.minScore, MIN_MIN_SCORE, MAX_MIN_SCORE))
+    ) {
+      throw new AppError(
+        400,
+        "VALIDATION_ERROR",
+        "GEPA ジョブの feedbackLimit/failedLimit/minScore が不正です。"
       );
     }
 
@@ -376,8 +445,16 @@ export class GepaJobService {
 
       const restoredJobs: GepaJobRecord[] = [];
       for (const candidate of rawJobs) {
-        const job = toPersistedJobRecord(candidate);
-        if (!job) continue;
+        const parsedJob = toPersistedJobRecord(candidate);
+        if (!parsedJob.job) {
+          console.warn(
+            `[GepaJobService] skipped invalid persisted job${
+              parsedJob.jobId ? ` (${parsedJob.jobId})` : ""
+            }: ${parsedJob.reason}`
+          );
+          continue;
+        }
+        const job = parsedJob.job;
         if (job.status === "running") {
           job.status = "queued";
           job.startedAt = undefined;
