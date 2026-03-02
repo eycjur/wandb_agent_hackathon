@@ -170,8 +170,14 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
           type="button"
           className="primaryButton"
           onClick={handleGenerate}
-          disabled={loading || (llmProvider !== "gemini" && weaveData === null)}
-          title={llmProvider !== "gemini" && weaveData === null ? "まず「Weave からデータを取得」を実行してください" : undefined}
+          disabled={loading || !wandbConfigured || (llmProvider !== "gemini" && weaveData === null)}
+          title={
+            !wandbConfigured
+              ? "まず W&B を設定してください"
+              : llmProvider !== "gemini" && weaveData === null
+                ? "まず「Weave からデータを取得」を実行してください"
+                : undefined
+          }
         >
           {loading ? "生成中..." : "改善案を生成"}
         </button>
