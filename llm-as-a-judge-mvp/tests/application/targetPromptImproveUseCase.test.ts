@@ -1,19 +1,17 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppError } from "@/lib/errors";
-import type { HumanFeedbackRecord } from "@/lib/infrastructure/humanFeedbackStore";
+import type { EvaluationLogRecord } from "@/lib/infrastructure/evaluationLogStore";
 
 const mockGetDomainPromptConfig = vi.fn();
 const mockGenerateTextForPromptImprovement = vi.fn();
-const mockOptimizeJudgePromptWithGEPA = vi.fn();
-const mockGetWeaveProjectId = vi.fn();
+const mockOptimizeTargetPromptWithGEPA = vi.fn();
 
 vi.mock("@/lib/config/domainPromptLoader", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@/lib/config/domainPromptLoader")>();
   return {
     ...actual,
-    getDomainPromptConfig: (...args: unknown[]) =>
-      mockGetDomainPromptConfig(...args)
+    getDomainPromptConfig: (...args: unknown[]) => mockGetDomainPromptConfig(...args)
   };
 });
 
@@ -22,48 +20,57 @@ vi.mock("@/lib/infrastructure/promptImproveGenerator", () => ({
     mockGenerateTextForPromptImprovement(...args)
 }));
 
-vi.mock("@/lib/infrastructure/ax/axGepaOptimizer", () => ({
-  optimizeJudgePromptWithGEPA: (...args: unknown[]) =>
-    mockOptimizeJudgePromptWithGEPA(...args)
+vi.mock("@/lib/infrastructure/ax/axGepaTargetOptimizer", () => ({
+  optimizeTargetPromptWithGEPA: (...args: unknown[]) =>
+    mockOptimizeTargetPromptWithGEPA(...args)
 }));
 
-vi.mock("@/lib/infrastructure/weave/weaveProjectId", () => ({
-  getWeaveProjectId: (...args: unknown[]) => mockGetWeaveProjectId(...args)
-}));
-
-const feedbackRecords: HumanFeedbackRecord[] = [
+const failedRecords: EvaluationLogRecord[] = [
   {
-    id: "hf_1",
+    id: "ev_1",
     domain: "resume_summary",
     userInput: "input1",
     generatedOutput: "output1",
-    judgeResult: { score: 2, reason: "short", pass: false },
-    humanScore: 4,
+    judgeResult: {
+      score: 1,
+      reason: "weak",
+      pass: false,
+      passThreshold: 4,
+      rubricVersion: 1
+    },
     createdAt: "2026-03-01T00:00:00.000Z"
   },
   {
-    id: "hf_2",
+    id: "ev_2",
     domain: "resume_summary",
     userInput: "input2",
     generatedOutput: "output2",
-    judgeResult: { score: 2, reason: "short", pass: false },
-    humanScore: 5,
+    judgeResult: {
+      score: 2,
+      reason: "weak",
+      pass: false,
+      passThreshold: 4,
+      rubricVersion: 1
+    },
     createdAt: "2026-03-01T00:00:00.000Z"
   },
   {
-    id: "hf_3",
+    id: "ev_3",
     domain: "resume_summary",
     userInput: "input3",
     generatedOutput: "output3",
-    judgeResult: { score: 3, reason: "ok", pass: false },
-    humanScore: 1,
+    judgeResult: {
+      score: 2,
+      reason: "weak",
+      pass: false,
+      passThreshold: 4,
+      rubricVersion: 1
+    },
     createdAt: "2026-03-01T00:00:00.000Z"
   }
 ];
 
-describe("generateJudgePromptImprovement", () => {
-  const originalWandbApiKey = process.env.WANDB_API_KEY;
-
+describe("generateTargetPromptImprovement", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     const { clearGepaResultCacheForTest } = await import(
@@ -73,57 +80,47 @@ describe("generateJudgePromptImprovement", () => {
 
     mockGetDomainPromptConfig.mockResolvedValue({
       domain: "resume_summary",
-      judgeInstruction: "current judge instruction",
-      judgeRubric: ["観点A", "観点B"],
-      passThreshold: 4
+      targetInstruction: "current target instruction",
+      judgeRubric: ["観点A", "観点B"]
     });
-    mockGetWeaveProjectId.mockResolvedValue("entity/project");
-  });
-
-  afterEach(() => {
-    if (originalWandbApiKey === undefined) {
-      delete process.env.WANDB_API_KEY;
-    } else {
-      process.env.WANDB_API_KEY = originalWandbApiKey;
-    }
   });
 
   it("ax/gepa成功時はGEPA結果を返す", async () => {
-    mockOptimizeJudgePromptWithGEPA.mockResolvedValue({
+    mockOptimizeTargetPromptWithGEPA.mockResolvedValue({
       suggestion: "gepa suggestion",
       analysisSummary: "gepa summary"
     });
 
-    const { generateJudgePromptImprovement } = await import(
-      "@/lib/application/judgePromptImproveUseCase"
+    const { generateTargetPromptImprovement } = await import(
+      "@/lib/application/targetPromptImproveUseCase"
     );
 
-    const result = await generateJudgePromptImprovement(
-      feedbackRecords,
+    const result = await generateTargetPromptImprovement(
+      failedRecords,
       "resume_summary",
       { llmProvider: "ax", axMethod: "gepa" }
     );
 
     expect(result.resultSource).toBe("gepa");
     expect(result.suggestion).toBe("gepa suggestion");
-    expect(mockOptimizeJudgePromptWithGEPA).toHaveBeenCalledTimes(1);
+    expect(mockOptimizeTargetPromptWithGEPA).toHaveBeenCalledTimes(1);
     expect(mockGenerateTextForPromptImprovement).not.toHaveBeenCalled();
   });
 
   it("ax/gepaが2段とも失敗した場合は通常改善へフォールバックする", async () => {
-    mockOptimizeJudgePromptWithGEPA.mockRejectedValue(
+    mockOptimizeTargetPromptWithGEPA.mockRejectedValue(
       new AppError(504, "PROVIDER_TIMEOUT", "GEPA timeout", "timeout")
     );
     mockGenerateTextForPromptImprovement.mockResolvedValue(
       "【分析サマリー】fallback summary\n【改善案】fallback suggestion"
     );
 
-    const { generateJudgePromptImprovement } = await import(
-      "@/lib/application/judgePromptImproveUseCase"
+    const { generateTargetPromptImprovement } = await import(
+      "@/lib/application/targetPromptImproveUseCase"
     );
 
-    const result = await generateJudgePromptImprovement(
-      feedbackRecords,
+    const result = await generateTargetPromptImprovement(
+      failedRecords,
       "resume_summary",
       { llmProvider: "ax", axMethod: "gepa" }
     );
@@ -131,13 +128,13 @@ describe("generateJudgePromptImprovement", () => {
     expect(result.resultSource).toBe("fallback");
     expect(result.analysisSummary).toBe("fallback summary");
     expect(result.suggestion).toBe("fallback suggestion");
-    expect(mockOptimizeJudgePromptWithGEPA).toHaveBeenCalledTimes(2);
+    expect(mockOptimizeTargetPromptWithGEPA).toHaveBeenCalledTimes(2);
     expect(result.degradedReason).toContain("stage1:");
     expect(result.degradedReason).toContain("stage2:");
   });
 
   it("ax/gepaで1段目失敗・2段目成功ならGEPA結果を返す", async () => {
-    mockOptimizeJudgePromptWithGEPA
+    mockOptimizeTargetPromptWithGEPA
       .mockRejectedValueOnce(
         new AppError(504, "PROVIDER_TIMEOUT", "GEPA timeout", "timeout")
       )
@@ -146,39 +143,39 @@ describe("generateJudgePromptImprovement", () => {
         analysisSummary: "gepa summary stage2"
       });
 
-    const { generateJudgePromptImprovement } = await import(
-      "@/lib/application/judgePromptImproveUseCase"
+    const { generateTargetPromptImprovement } = await import(
+      "@/lib/application/targetPromptImproveUseCase"
     );
 
-    const result = await generateJudgePromptImprovement(
-      feedbackRecords,
+    const result = await generateTargetPromptImprovement(
+      failedRecords,
       "resume_summary",
       { llmProvider: "ax", axMethod: "gepa" }
     );
 
     expect(result.resultSource).toBe("gepa");
     expect(result.suggestion).toBe("gepa suggestion stage2");
-    expect(mockOptimizeJudgePromptWithGEPA).toHaveBeenCalledTimes(2);
+    expect(mockOptimizeTargetPromptWithGEPA).toHaveBeenCalledTimes(2);
     expect(mockGenerateTextForPromptImprovement).not.toHaveBeenCalled();
   });
 
   it("ax/gepa成功結果は同一入力ならキャッシュヒットする", async () => {
-    mockOptimizeJudgePromptWithGEPA.mockResolvedValue({
+    mockOptimizeTargetPromptWithGEPA.mockResolvedValue({
       suggestion: "cached gepa suggestion",
       analysisSummary: "cached gepa summary"
     });
 
-    const { generateJudgePromptImprovement } = await import(
-      "@/lib/application/judgePromptImproveUseCase"
+    const { generateTargetPromptImprovement } = await import(
+      "@/lib/application/targetPromptImproveUseCase"
     );
 
-    const first = await generateJudgePromptImprovement(
-      feedbackRecords,
+    const first = await generateTargetPromptImprovement(
+      failedRecords,
       "resume_summary",
       { llmProvider: "ax", axMethod: "gepa" }
     );
-    const second = await generateJudgePromptImprovement(
-      feedbackRecords,
+    const second = await generateTargetPromptImprovement(
+      failedRecords,
       "resume_summary",
       { llmProvider: "ax", axMethod: "gepa" }
     );
@@ -186,7 +183,7 @@ describe("generateJudgePromptImprovement", () => {
     expect(first.resultSource).toBe("gepa");
     expect(second.resultSource).toBe("gepa");
     expect(second.suggestion).toBe("cached gepa suggestion");
-    expect(mockOptimizeJudgePromptWithGEPA).toHaveBeenCalledTimes(1);
+    expect(mockOptimizeTargetPromptWithGEPA).toHaveBeenCalledTimes(1);
   });
 
   it("non-GEPA実行時はstandard結果を返す", async () => {
@@ -194,35 +191,17 @@ describe("generateJudgePromptImprovement", () => {
       "【分析サマリー】standard summary\n【改善案】standard suggestion"
     );
 
-    const { generateJudgePromptImprovement } = await import(
-      "@/lib/application/judgePromptImproveUseCase"
+    const { generateTargetPromptImprovement } = await import(
+      "@/lib/application/targetPromptImproveUseCase"
     );
 
-    const result = await generateJudgePromptImprovement(
-      feedbackRecords,
+    const result = await generateTargetPromptImprovement(
+      failedRecords,
       "resume_summary",
       { llmProvider: "ax", axMethod: "few-shot" }
     );
 
     expect(result.resultSource).toBe("standard");
     expect(result.suggestion).toBe("standard suggestion");
-  });
-
-  it("gemini プロバイダで WANDB_API_KEY が未設定の場合 CONFIG_ERROR(500) を投げる", async () => {
-    delete process.env.WANDB_API_KEY;
-
-    const { generateJudgePromptImprovement } = await import(
-      "@/lib/application/judgePromptImproveUseCase"
-    );
-
-    const error = await generateJudgePromptImprovement(
-      feedbackRecords,
-      "resume_summary",
-      { llmProvider: "gemini" }
-    ).catch((e) => e);
-
-    expect(error).toBeInstanceOf(AppError);
-    expect(error.status).toBe(500);
-    expect(error.code).toBe("CONFIG_ERROR");
   });
 });

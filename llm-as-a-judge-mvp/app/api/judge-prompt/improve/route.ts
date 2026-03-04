@@ -6,34 +6,10 @@ import {
 } from "@/lib/contracts/generateEvaluate";
 import { AppError } from "@/lib/errors";
 import { generateJudgePromptImprovement } from "@/lib/application/judgePromptImproveUseCase";
-import { listHumanFeedback } from "@/lib/infrastructure/humanFeedbackStore";
-import { fetchHumanFeedbackWithJudgeMerged } from "@/lib/infrastructure/weave/weaveQuery";
-import { isWeaveConfigured } from "@/lib/infrastructure/weave/weaveClient";
-import type { DomainId } from "@/lib/config/domainPromptLoader";
+import { loadJudgeFeedbackForPromptOptimization } from "@/lib/application/promptOptimization/gepaDataLoader";
 
 function jsonError(status: number, code: ErrorCode, message: string) {
   return NextResponse.json({ error: { code, message } }, { status });
-}
-
-const VALID_DOMAINS: DomainId[] = ["resume_summary", "resume_detail", "self_pr"];
-
-/** Weave の HumanFeedbackFromWeave を HumanFeedbackRecord 形式に変換 */
-function toHumanFeedbackRecord(
-  r: Awaited<ReturnType<typeof fetchHumanFeedbackWithJudgeMerged>>[number]
-) {
-  const domain = VALID_DOMAINS.includes(r.domain as DomainId) ? (r.domain as DomainId) : "resume_summary";
-  const judgeResult =
-    r.judgeResult ?? (r.judgeScore != null ? { score: r.judgeScore, reason: "", pass: false } : undefined);
-  return {
-    id: r.id,
-    domain,
-    userInput: r.userInput ?? "",
-    generatedOutput: r.generatedOutput ?? "",
-    judgeResult,
-    humanScore: r.humanScore,
-    humanComment: r.humanComment,
-    createdAt: r.createdAt
-  };
 }
 
 export async function POST(request: NextRequest) {
@@ -56,28 +32,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    let feedbackRecords: Awaited<ReturnType<typeof listHumanFeedback>>;
-
-    if (isWeaveConfigured()) {
-      try {
-        const fromWeave = await fetchHumanFeedbackWithJudgeMerged({
-          domain: parsed.data.domain,
-          limit: parsed.data.feedbackLimit
-        });
-        feedbackRecords = fromWeave.map(toHumanFeedbackRecord);
-      } catch {
-        feedbackRecords = [];
-      }
-    } else {
-      feedbackRecords = [];
-    }
-
-    if (feedbackRecords.length === 0) {
-      feedbackRecords = await listHumanFeedback({
-        domain: parsed.data.domain,
-        limit: parsed.data.feedbackLimit
-      });
-    }
+    const feedbackRecords = await loadJudgeFeedbackForPromptOptimization(
+      parsed.data.domain,
+      parsed.data.feedbackLimit
+    );
 
     const result = await generateJudgePromptImprovement(feedbackRecords, parsed.data.domain, {
       llmProvider: parsed.data.llmProvider,

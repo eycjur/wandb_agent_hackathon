@@ -194,11 +194,18 @@ npm test
 | `GET /api/human-feedback` | 人間評価一覧（クエリ: `domain`, `limit`） |
 | `POST /api/judge-prompt/improve` | Judge プロンプト改善案を LLM 生成 |
 | `POST /api/target-prompt/improve` | 生成プロンプト改善案を LLM 生成 |
+| `POST /api/gepa-jobs` | GEPA 最適化ジョブを非同期で投入（`ax + gepa` 専用） |
+| `GET /api/gepa-jobs/:jobId` | GEPA 最適化ジョブの状態・結果を取得 |
 | `GET /api/wandb-status` | W&B 設定状態（`configured`, `dashboardUrl`） |
 | `GET /api/weave/human-feedback?domain=&limit=` | Weave から人間評価ログ取得（Judge 改善用） |
 | `GET /api/weave/judge-logs?domain=&limit=` | Weave から Judge 評価ログ取得（生成プロンプト改善用） |
 | `GET /api/weave/debug` | Weave 状態診断（project_id、件数、op 一覧） |
 | `POST /api/prompts/sync-to-weave` | プロンプトを Weave に同期 |
+
+**GEPA キュー実装メモ**
+- ジョブ状態はサーバー側キューで管理され、既定で `/tmp/llm-as-a-judge-mvp/gepa-jobs-state.json` に保存されます（`GEPA_JOB_STATE_FILE` で変更可）。
+- プロセス再起動時は `running` ジョブを `queued` として再実行します。
+- Weave が有効で取得に成功した場合、0件でもその結果を採用します（ローカルメモリへのフォールバックは取得エラー時のみ）。
 
 ### Request / Response 例
 

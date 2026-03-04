@@ -10,7 +10,13 @@ import type { TargetPromptImproveResponse } from "@/lib/contracts/generateEvalua
 function isTargetImproveResponse(data: unknown): data is TargetPromptImproveResponse {
   if (typeof data !== "object" || data === null) return false;
   const d = data as TargetPromptImproveResponse;
-  return typeof d.suggestion === "string" && typeof d.analysisSummary === "string";
+  return (
+    typeof d.suggestion === "string" &&
+    typeof d.analysisSummary === "string" &&
+    (d.resultSource === "gepa" ||
+      d.resultSource === "fallback" ||
+      d.resultSource === "standard")
+  );
 }
 
 type Props = {
@@ -141,6 +147,12 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
     if (loading) return "改善案を生成中です...";
     if (error) return error;
     if (publishMessage) return "Weave に反映しました。";
+    if (improvement?.resultSource === "gepa") {
+      return "GEPA 最適化結果を取得しました。Weave に反映するか、コピーしてご利用ください。";
+    }
+    if (improvement?.resultSource === "fallback") {
+      return "GEPA が失敗したため、通常生成で改善案を返しました。";
+    }
     if (improvement) return "改善案が生成されました。Weave に反映するか、コピーしてご利用ください。";
     if (weaveData === null) return "まず「Weave からデータを取得」を押してデータを取得してください。";
     if (weaveData.length === 0) return "取得したデータがありません。評価を実行してから再度取得してください。";
@@ -230,6 +242,12 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
 
       {improvement && (
         <div className="improvementResult">
+          {improvement.resultSource === "fallback" && (
+            <p className="hintText" style={{ marginBottom: "8px" }}>
+              GEPA 実行に失敗したためフォールバック結果を表示しています。
+              {improvement.degradedReason ? ` (${improvement.degradedReason})` : ""}
+            </p>
+          )}
           <h3>分析サマリー</h3>
           <p>{improvement.analysisSummary}</p>
           <h3>改善案（生成プロンプトに貼り付け）</h3>

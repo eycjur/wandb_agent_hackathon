@@ -6,39 +6,10 @@ import {
 } from "@/lib/contracts/generateEvaluate";
 import { AppError } from "@/lib/errors";
 import { generateTargetPromptImprovement } from "@/lib/application/targetPromptImproveUseCase";
-import { fetchJudgeLogsFromWeave } from "@/lib/infrastructure/weave/weaveQuery";
-import { isWeaveConfigured } from "@/lib/infrastructure/weave/weaveClient";
-import { listFailedEvaluations } from "@/lib/infrastructure/evaluationLogStore";
-import { getDomainPromptConfig } from "@/lib/config/domainPromptLoader";
-import type { DomainId } from "@/lib/config/domainPromptLoader";
-import type { EvaluationLogRecord } from "@/lib/infrastructure/evaluationLogStore";
-import type { JudgeLogFromWeave } from "@/lib/infrastructure/weave/weaveQuery";
+import { loadTargetFailuresForPromptOptimization } from "@/lib/application/promptOptimization/gepaDataLoader";
 
 function jsonError(status: number, code: ErrorCode, message: string) {
   return NextResponse.json({ error: { code, message } }, { status });
-}
-
-const VALID_DOMAINS: DomainId[] = ["resume_summary", "resume_detail", "self_pr"];
-
-/** Weave の JudgeLogFromWeave を EvaluationLogRecord 形式に変換 */
-function toEvaluationLogRecord(
-  r: JudgeLogFromWeave
-): EvaluationLogRecord {
-  const domain = VALID_DOMAINS.includes(r.domain as DomainId) ? r.domain as DomainId : "resume_summary";
-  return {
-    id: r.id,
-    domain,
-    userInput: r.userInput ?? "",
-    generatedOutput: r.generatedOutput ?? "",
-    judgeResult: {
-      score: r.score,
-      reason: r.reason ?? "",
-      pass: r.pass,
-      passThreshold: r.passThreshold,
-      rubricVersion: r.rubricVersion
-    },
-    createdAt: r.createdAt
-  };
 }
 
 export async function POST(request: NextRequest) {
@@ -61,35 +32,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const promptConfig = await getDomainPromptConfig(parsed.data.domain);
-    const minScore = parsed.data.minScore ?? promptConfig.passThreshold;
-
-    let failedRecords: EvaluationLogRecord[];
-
-    if (isWeaveConfigured()) {
-      try {
-        const fromWeave = await fetchJudgeLogsFromWeave({
-          domain: parsed.data.domain,
-          limit: parsed.data.failedLimit * 2
-        });
-        const converted = fromWeave.map(toEvaluationLogRecord);
-        failedRecords = converted
-          .filter((r) => !r.judgeResult.pass || r.judgeResult.score < minScore)
-          .slice(0, parsed.data.failedLimit);
-      } catch {
-        failedRecords = await listFailedEvaluations({
-          domain: parsed.data.domain,
-          limit: parsed.data.failedLimit,
-          minScore
-        });
-      }
-    } else {
-      failedRecords = await listFailedEvaluations({
-        domain: parsed.data.domain,
-        limit: parsed.data.failedLimit,
-        minScore
-      });
-    }
+    const failedRecords = await loadTargetFailuresForPromptOptimization(
+      parsed.data.domain,
+      parsed.data.failedLimit,
+      parsed.data.minScore
+    );
 
     const result = await generateTargetPromptImprovement(failedRecords, parsed.data.domain, {
       llmProvider: parsed.data.llmProvider,

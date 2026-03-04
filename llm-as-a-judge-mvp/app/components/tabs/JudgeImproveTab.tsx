@@ -11,6 +11,8 @@ type ImprovementResult = {
   suggestion: string;
   analysisSummary: string;
   currentPrompt?: string;
+  resultSource: "gepa" | "fallback" | "standard";
+  degradedReason?: string;
 };
 
 type Props = {
@@ -99,7 +101,9 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
       setImprovement({
         suggestion: data.suggestion,
         analysisSummary: data.analysisSummary,
-        currentPrompt: data.currentPrompt
+        currentPrompt: data.currentPrompt,
+        resultSource: data.resultSource,
+        degradedReason: data.degradedReason
       });
       onImprovementGenerated?.();
     } catch (e) {
@@ -140,6 +144,12 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
     if (loading) return "改善案を生成中です...";
     if (error) return error;
     if (publishMessage) return "Weave に反映しました。";
+    if (improvement?.resultSource === "gepa") {
+      return "GEPA 最適化結果を取得しました。Weave に反映するか、コピーしてご利用ください。";
+    }
+    if (improvement?.resultSource === "fallback") {
+      return "GEPA が失敗したため、通常生成で改善案を返しました。";
+    }
     if (improvement) return "改善案が生成されました。Weave に反映するか、コピーしてご利用ください。";
     if (llmProvider === "gemini") {
       return "Gemini はデータを自動取得して改善案を生成します。「改善案を生成」を押してください。";
@@ -240,6 +250,12 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
 
       {improvement && (
         <div className="improvementResult">
+          {improvement.resultSource === "fallback" && (
+            <p className="hintText" style={{ marginBottom: 8 }}>
+              GEPA 実行に失敗したためフォールバック結果を表示しています。
+              {improvement.degradedReason ? ` (${improvement.degradedReason})` : ""}
+            </p>
+          )}
           <h3>分析サマリー</h3>
           <p>{improvement.analysisSummary}</p>
           {improvement.currentPrompt != null && improvement.currentPrompt !== "" ? (

@@ -1,13 +1,28 @@
 import type { DomainId } from "@/lib/config/domainPromptLoader";
 import { getDomainPromptConfig } from "@/lib/config/domainPromptLoader";
+import { AppError } from "@/lib/errors";
 import { generateTextForPromptImprovement } from "@/lib/infrastructure/promptImproveGenerator";
 import { optimizeTargetPromptWithGEPA } from "@/lib/infrastructure/ax/axGepaTargetOptimizer";
 import type { EvaluationLogRecord } from "@/lib/infrastructure/evaluationLogStore";
 import type { AxMethodId, LLMProviderId } from "@/lib/contracts/generateEvaluate";
+import {
+  GEPA_TARGET_FAST_UI_BUDGET,
+  GEPA_TARGET_ULTRA_FAST_BUDGET
+} from "@/lib/application/promptOptimization/gepaRuntimeConfig";
+import {
+  buildGepaCacheKey,
+  clearGepaFailureCooldown,
+  getCachedGepaResult,
+  getGepaFailureCooldownReason,
+  setGepaFailureCooldown,
+  setCachedGepaResult
+} from "@/lib/application/promptOptimization/gepaResultCache";
 
 export interface TargetPromptImprovementResult {
   suggestion: string;
   analysisSummary: string;
+  resultSource: "gepa" | "fallback" | "standard";
+  degradedReason?: string;
 }
 
 export type TargetPromptImproveOptions = {
@@ -15,28 +30,53 @@ export type TargetPromptImproveOptions = {
   axMethod?: AxMethodId;
 };
 
-/**
- * 不合格・低スコアの評価結果を分析し、生成プロンプトの改善案を LLM で生成する
- */
-export async function generateTargetPromptImprovement(
+const GEPA_RECOVERABLE_ERROR_CODES = new Set([
+  "PROVIDER_TIMEOUT",
+  "PROVIDER_ERROR",
+  "PROVIDER_RESPONSE_INVALID"
+]);
+
+function canFallbackFromGepa(error: unknown): boolean {
+  return error instanceof AppError && GEPA_RECOVERABLE_ERROR_CODES.has(error.code);
+}
+
+function toDegradedReason(error: unknown): string {
+  if (error instanceof AppError) {
+    return `${error.code}: ${error.exposeMessage}`;
+  }
+  if (error instanceof Error) return error.message;
+  return "GEPA failure";
+}
+
+function buildTargetGepaCachePayload(
   failedRecords: EvaluationLogRecord[],
-  domain: DomainId,
-  options: TargetPromptImproveOptions = {}
-): Promise<TargetPromptImprovementResult> {
-  if (failedRecords.length === 0) {
-    return {
-      suggestion:
-        "不合格・低スコアの評価データがありません。生成・評価を実行してから再度お試しください。",
-      analysisSummary: "分析対象なし"
-    };
-  }
+  promptConfig: Awaited<ReturnType<typeof getDomainPromptConfig>>
+) {
+  return {
+    targetInstruction: promptConfig.targetInstruction,
+    judgeRubric: promptConfig.judgeRubric,
+    records: failedRecords.map((record) => ({
+      id: record.id,
+      userInput: record.userInput,
+      generatedOutput: record.generatedOutput,
+      score: record.judgeResult.score,
+      reason: record.judgeResult.reason,
+      passThreshold: record.judgeResult.passThreshold
+    }))
+  };
+}
 
-  if (options.llmProvider === "ax" && options.axMethod === "gepa") {
-    return optimizeTargetPromptWithGEPA(failedRecords, domain);
-  }
+function mergeStageErrors(errors: unknown[]): string {
+  return errors
+    .map((error, index) => `stage${index + 1}: ${toDegradedReason(error)}`)
+    .join(" | ");
+}
 
-  const promptConfig = await getDomainPromptConfig(domain);
-
+async function generateStandardTargetImprovement(
+  failedRecords: EvaluationLogRecord[],
+  promptConfig: Awaited<ReturnType<typeof getDomainPromptConfig>>,
+  options: TargetPromptImproveOptions
+): Promise<Pick<TargetPromptImprovementResult, "suggestion" | "analysisSummary">> {
   const examplesText = failedRecords
     .map(
       (r, i) =>
@@ -87,4 +127,92 @@ ${examplesText}
   const suggestion = suggestionMatch?.[1]?.trim() ?? rawResponse;
 
   return { suggestion, analysisSummary };
+}
+
+/**
+ * 不合格・低スコアの評価結果を分析し、生成プロンプトの改善案を LLM で生成する
+ */
+export async function generateTargetPromptImprovement(
+  failedRecords: EvaluationLogRecord[],
+  domain: DomainId,
+  options: TargetPromptImproveOptions = {}
+): Promise<TargetPromptImprovementResult> {
+  if (failedRecords.length === 0) {
+    return {
+      suggestion:
+        "不合格・低スコアの評価データがありません。生成・評価を実行してから再度お試しください。",
+      analysisSummary: "分析対象なし",
+      resultSource: "standard"
+    };
+  }
+  const promptConfig = await getDomainPromptConfig(domain);
+
+  if (options.llmProvider === "ax" && options.axMethod === "gepa") {
+    const cacheKey = buildGepaCacheKey(
+      "target",
+      domain,
+      buildTargetGepaCachePayload(failedRecords, promptConfig)
+    );
+    const cached = getCachedGepaResult<
+      Pick<TargetPromptImprovementResult, "suggestion" | "analysisSummary">
+    >(cacheKey);
+    if (cached) {
+      return { ...cached, resultSource: "gepa" };
+    }
+    const cooldownReason = getGepaFailureCooldownReason(cacheKey);
+    if (cooldownReason) {
+      const fallbackResult = await generateStandardTargetImprovement(
+        failedRecords,
+        promptConfig,
+        options
+      );
+      return {
+        ...fallbackResult,
+        resultSource: "fallback",
+        degradedReason: `cooldown-skip: ${cooldownReason}`
+      };
+    }
+
+    const stageErrors: unknown[] = [];
+    for (const budget of [GEPA_TARGET_FAST_UI_BUDGET, GEPA_TARGET_ULTRA_FAST_BUDGET]) {
+      try {
+        const gepaResult = await optimizeTargetPromptWithGEPA(
+          failedRecords,
+          domain,
+          budget
+        );
+        setCachedGepaResult(cacheKey, {
+          suggestion: gepaResult.suggestion,
+          analysisSummary: gepaResult.analysisSummary
+        });
+        clearGepaFailureCooldown(cacheKey);
+        return { ...gepaResult, resultSource: "gepa" };
+      } catch (error) {
+        if (!canFallbackFromGepa(error)) {
+          throw error;
+        }
+        stageErrors.push(error);
+      }
+    }
+
+    const fallbackResult = await generateStandardTargetImprovement(
+      failedRecords,
+      promptConfig,
+      options
+    );
+    const mergedStageErrors = mergeStageErrors(stageErrors);
+    setGepaFailureCooldown(cacheKey, mergedStageErrors);
+    return {
+      ...fallbackResult,
+      resultSource: "fallback",
+      degradedReason: mergedStageErrors
+    };
+  }
+
+  const standardResult = await generateStandardTargetImprovement(
+    failedRecords,
+    promptConfig,
+    options
+  );
+  return { ...standardResult, resultSource: "standard" };
 }

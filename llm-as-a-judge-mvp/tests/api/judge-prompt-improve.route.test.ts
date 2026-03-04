@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockListHumanFeedback = vi.fn();
+const mockLoadJudgeFeedbackForPromptOptimization = vi.fn();
 const mockGenerateJudgePromptImprovement = vi.fn();
 
-vi.mock("@/lib/infrastructure/humanFeedbackStore", () => ({
-  listHumanFeedback: (...args: unknown[]) => mockListHumanFeedback(...args)
+vi.mock("@/lib/application/promptOptimization/gepaDataLoader", () => ({
+  loadJudgeFeedbackForPromptOptimization: (...args: unknown[]) =>
+    mockLoadJudgeFeedbackForPromptOptimization(...args)
 }));
 
 vi.mock("@/lib/application/judgePromptImproveUseCase", () => ({
@@ -15,7 +16,7 @@ vi.mock("@/lib/application/judgePromptImproveUseCase", () => ({
 describe("POST /api/judge-prompt/improve", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockListHumanFeedback.mockResolvedValue([
+    mockLoadJudgeFeedbackForPromptOptimization.mockResolvedValue([
       {
         id: "hf_1",
         domain: "resume_summary",
@@ -29,7 +30,8 @@ describe("POST /api/judge-prompt/improve", () => {
     ]);
     mockGenerateJudgePromptImprovement.mockResolvedValue({
       suggestion: "改善版の instruction_template テキスト",
-      analysisSummary: "Judge が高めに評価する傾向がある"
+      analysisSummary: "Judge が高めに評価する傾向がある",
+      resultSource: "standard"
     });
   });
 
@@ -64,10 +66,11 @@ describe("POST /api/judge-prompt/improve", () => {
     expect(response.status).toBe(200);
     expect(body.suggestion).toBe("改善版の instruction_template テキスト");
     expect(body.analysisSummary).toBe("Judge が高めに評価する傾向がある");
-    expect(mockListHumanFeedback).toHaveBeenCalledWith({
-      domain: "resume_summary",
-      limit: 10
-    });
+    expect(body.resultSource).toBe("standard");
+    expect(mockLoadJudgeFeedbackForPromptOptimization).toHaveBeenCalledWith(
+      "resume_summary",
+      10
+    );
   });
 
   it("feedbackLimitを指定できる", async () => {
@@ -81,9 +84,9 @@ describe("POST /api/judge-prompt/improve", () => {
 
     await POST(request as never);
 
-    expect(mockListHumanFeedback).toHaveBeenCalledWith({
-      domain: "resume_summary",
-      limit: 5
-    });
+    expect(mockLoadJudgeFeedbackForPromptOptimization).toHaveBeenCalledWith(
+      "resume_summary",
+      5
+    );
   });
 });

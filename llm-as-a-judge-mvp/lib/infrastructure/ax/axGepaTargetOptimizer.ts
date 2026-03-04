@@ -6,16 +6,35 @@ import { ai, ax, AxAIGoogleGeminiModel, AxGEPA } from "@ax-llm/ax";
 import { AppError } from "@/lib/errors";
 import { getDomainPromptConfig } from "@/lib/config/domainPromptLoader";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
-import { JUDGE_MODEL, MODEL_TIMEOUT_MS, TARGET_MODEL } from "@/lib/config/llm";
+import { GEPA_MODEL, TARGET_MODEL } from "@/lib/config/llm";
 import type { EvaluationLogRecord } from "@/lib/infrastructure/evaluationLogStore";
 import {
   calculateTargetGepaMetric,
   type TargetGepaMetricExample
 } from "@/lib/application/promptOptimization/gepaMetrics";
+import {
+  type GepaCompileBudget,
+  GEPA_TARGET_FAST_UI_BUDGET,
+  truncateForGepa
+} from "@/lib/application/promptOptimization/gepaRuntimeConfig";
 
 export interface GepaTargetOptimizationResult {
   suggestion: string;
   analysisSummary: string;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("metric timeout")), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /**
@@ -24,7 +43,8 @@ export interface GepaTargetOptimizationResult {
  */
 export async function optimizeTargetPromptWithGEPA(
   failedRecords: EvaluationLogRecord[],
-  domain: DomainId
+  domain: DomainId,
+  compileBudget: GepaCompileBudget = GEPA_TARGET_FAST_UI_BUDGET
 ): Promise<GepaTargetOptimizationResult> {
   if (failedRecords.length < 3) {
     return {
@@ -45,6 +65,7 @@ export async function optimizeTargetPromptWithGEPA(
   }
 
   const promptConfig = await getDomainPromptConfig(domain);
+  const budget = compileBudget;
   const targetDescription = [
     promptConfig.targetInstruction,
     "",
@@ -66,8 +87,8 @@ export async function optimizeTargetPromptWithGEPA(
     { description: judgeDescription }
   );
 
-  const examples = failedRecords.slice(0, 12).map((r) => ({
-    userInput: r.userInput,
+  const examples = failedRecords.slice(0, budget.maxExamples).map((r) => ({
+    userInput: truncateForGepa(r.userInput, budget.maxInputChars),
     passThreshold: r.judgeResult.passThreshold,
     baselineScore: r.judgeResult.score,
     domain
@@ -82,22 +103,30 @@ export async function optimizeTargetPromptWithGEPA(
   const judgeAI = ai({
     name: "google-gemini",
     apiKey,
-    config: { model: JUDGE_MODEL as AxAIGoogleGeminiModel, temperature: 0 }
+    config: { model: GEPA_MODEL as AxAIGoogleGeminiModel, temperature: 0 }
   });
 
   const metricFn = async (arg: Readonly<{ prediction: unknown; example: unknown }>): Promise<number> => {
-    const output = (arg.prediction as { generatedOutput?: string })?.generatedOutput?.trim();
+    const rawOutput = (arg.prediction as { generatedOutput?: string })?.generatedOutput?.trim();
+    const output = rawOutput
+      ? truncateForGepa(rawOutput, budget.maxOutputChars)
+      : rawOutput;
     if (!output) return 0;
 
     const ex = arg.example as TargetGepaMetricExample;
     const userInput = ex?.userInput ?? "";
 
     try {
-      const judgeResult = await judgeProgram.forward(
-        judgeAI,
-        { userInput, generatedOutput: output },
-        { stream: false }
+      const metricTimeoutMs = budget.metricCallTimeoutMs ?? 7000;
+      const judgeResult = await withTimeout(
+        judgeProgram.forward(
+          judgeAI,
+          { userInput, generatedOutput: output },
+          { stream: false }
+        ),
+        metricTimeoutMs
       );
+
       return calculateTargetGepaMetric(judgeResult.score, output, {
         userInput,
         passThreshold: Number(ex?.passThreshold ?? 4),
@@ -111,10 +140,10 @@ export async function optimizeTargetPromptWithGEPA(
 
   const optimizer = new AxGEPA({
     studentAI: targetAI,
-    numTrials: 6,
+    numTrials: budget.numTrials,
     minibatch: true,
-    minibatchSize: 3,
-    earlyStoppingTrials: 2,
+    minibatchSize: budget.minibatchSize,
+    earlyStoppingTrials: budget.earlyStoppingTrials,
     verbose: false
   });
 
@@ -125,15 +154,15 @@ export async function optimizeTargetPromptWithGEPA(
         reject(
           new AppError(504, "PROVIDER_TIMEOUT", "GEPA 最適化がタイムアウトしました。", "AxGEPA compile timed out.")
         ),
-      MODEL_TIMEOUT_MS * 4
+      budget.compileTimeoutMs
     );
   });
 
   try {
     const result = await Promise.race([
       optimizer.compile(generatorProgram, examples, metricFn, {
-        maxMetricCalls: 60,
-        maxIterations: 4
+        maxMetricCalls: budget.maxMetricCalls,
+        maxIterations: budget.maxIterations
       }),
       timeoutPromise
     ]);
