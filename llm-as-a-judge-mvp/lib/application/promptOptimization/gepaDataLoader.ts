@@ -5,6 +5,7 @@ import {
   type HumanFeedbackRecord
 } from "@/lib/infrastructure/humanFeedbackStore";
 import {
+  listEvaluationLogs,
   listFailedEvaluations,
   type EvaluationLogRecord
 } from "@/lib/infrastructure/evaluationLogStore";
@@ -114,4 +115,45 @@ export async function loadTargetFailuresForPromptOptimization(
     limit: failedLimit,
     minScore: effectiveMinScore
   });
+}
+
+export async function loadTargetExamplesForFewShot(
+  domain: DomainId,
+  limit: number
+): Promise<EvaluationLogRecord[]> {
+  if (isWeaveConfigured()) {
+    try {
+      const fromWeave = await fetchJudgeLogsFromWeave({
+        domain,
+        limit: Math.max(limit * 3, limit),
+        throwOnError: true
+      });
+      return fromWeave
+        .map(toEvaluationLogRecordFromWeave)
+        .filter((r) => r.userInput.trim().length > 0 && r.generatedOutput.trim().length > 0)
+        .sort((a, b) => {
+          if (b.judgeResult.score !== a.judgeResult.score) {
+            return b.judgeResult.score - a.judgeResult.score;
+          }
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        })
+        .slice(0, limit);
+    } catch {
+      // fall through to in-memory store when Weave request fails
+    }
+  }
+
+  const records = await listEvaluationLogs({
+    domain,
+    limit: Math.max(limit * 3, limit)
+  });
+  return records
+    .filter((r) => r.userInput.trim().length > 0 && r.generatedOutput.trim().length > 0)
+    .sort((a, b) => {
+      if (b.judgeResult.score !== a.judgeResult.score) {
+        return b.judgeResult.score - a.judgeResult.score;
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    })
+    .slice(0, limit);
 }

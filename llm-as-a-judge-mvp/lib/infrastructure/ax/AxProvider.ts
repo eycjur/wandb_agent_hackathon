@@ -4,12 +4,6 @@ import { getDomainPromptConfig } from "@/lib/config/domainPromptLoader";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
 import { JUDGE_MODEL, MODEL_TIMEOUT_MS, TARGET_MODEL } from "@/lib/config/llm";
 import { JudgeResult, LLMProvider } from "@/lib/domain/llm";
-import type { AxMethodId } from "@/lib/contracts/generateEvaluate";
-
-
-type AxProviderConfig = {
-  axMethod?: AxMethodId;
-};
 
 export class AxProvider implements LLMProvider {
   name = "ax-gemini";
@@ -17,11 +11,6 @@ export class AxProvider implements LLMProvider {
     target: TARGET_MODEL,
     judge: JUDGE_MODEL
   };
-  private axMethod: AxMethodId;
-
-  constructor(config: AxProviderConfig = {}) {
-    this.axMethod = config.axMethod ?? "few-shot";
-  }
 
   private getApiKey(): string {
     const apiKey =
@@ -85,20 +74,13 @@ export class AxProvider implements LLMProvider {
 
   async generateOutput(userInput: string, domain: DomainId): Promise<string> {
     const promptConfig = await getDomainPromptConfig(domain);
-    const descriptionParts = [
+    const description = [
       promptConfig.targetInstruction,
       "",
       "以下が [職務経歴入力] です。"
-    ];
-    if ((this.axMethod === "few-shot" || this.axMethod === "gepa") && promptConfig.samples?.length) {
-      descriptionParts.push(
-        "",
-        "参考となる入力例:",
-        ...promptConfig.samples.slice(0, 2).map((s) => `【${s.title}】\n${s.input}`)
-      );
-    }
+    ].join("\n");
     const generator = ax("userInput:string -> generatedOutput:string", {
-      description: descriptionParts.join("\n")
+      description
     });
 
     try {
@@ -142,21 +124,10 @@ export class AxProvider implements LLMProvider {
     domain: DomainId
   ): Promise<JudgeResult> {
     const promptConfig = await getDomainPromptConfig(domain);
-    const descriptionParts = [
-      promptConfig.judgeInstruction,
-      "",
-      "score は 0〜5 の整数、reason は日本語の簡潔な説明を返してください。"
-    ];
-    if ((this.axMethod === "few-shot" || this.axMethod === "gepa") && promptConfig.samples?.length) {
-      descriptionParts.push(
-        "",
-        "参考となる入力例（評価対象の形式理解用）:",
-        ...promptConfig.samples.slice(0, 2).map((s) => `【${s.title}】入力: ${s.input.slice(0, 200)}...`)
-      );
-    }
+    const description = promptConfig.judgeInstruction;
     const judge = ax(
       "userInput:string, generatedOutput:string -> score:number, reason:string",
-      { description: descriptionParts.join("\n") }
+      { description }
     );
 
     try {

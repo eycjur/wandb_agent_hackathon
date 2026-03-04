@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     const result = await generateJudgePromptImprovement(feedbackRecords, parsed.data.domain, {
       llmProvider: parsed.data.llmProvider,
-      axMethod: parsed.data.axMethod
+      improvementMethod: parsed.data.improvementMethod
     });
 
     const response = JudgePromptImproveResponseSchema.parse(result);

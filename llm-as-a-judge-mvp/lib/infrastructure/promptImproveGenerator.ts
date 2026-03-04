@@ -1,19 +1,20 @@
 /**
  * プロンプト改善案生成用の汎用テキスト生成
- * ax / Gemini の選択に応じて LLM を切り替える
+ * 改善方式に応じて LLM 呼び出しを切り替える
  */
 import { ai, ax, AxAIGoogleGeminiModel } from "@ax-llm/ax";
 import { AppError } from "@/lib/errors";
 import { JUDGE_MODEL, PROMPT_IMPROVE_TIMEOUT_MS } from "@/lib/config/llm";
 import { generateTextWithWandbMcp } from "@/lib/infrastructure/gemini/geminiMcpGenerator";
+import { generateText } from "@/lib/infrastructure/gemini/geminiTextGenerator";
 import type {
-  AxMethodId,
+  ImprovementMethodId,
   LLMProviderId,
 } from "@/lib/contracts/generateEvaluate";
 
 export type PromptImproveGeneratorOptions = {
   llmProvider?: LLMProviderId;
-  axMethod?: AxMethodId;
+  improvementMethod?: ImprovementMethodId;
 };
 
 /**
@@ -25,6 +26,7 @@ export async function generateTextForPromptImprovement(
   options: PromptImproveGeneratorOptions = {},
 ): Promise<string> {
   const llmProvider = options.llmProvider ?? "ax";
+  const improvementMethod = options.improvementMethod ?? "meta";
 
   if (llmProvider === "gemini") {
     if (!process.env.WANDB_API_KEY) {
@@ -41,7 +43,12 @@ export async function generateTextForPromptImprovement(
     return generateTextWithWandbMcp(prompt);
   }
 
-  // ax の場合: ax() のシグネチャでプロンプトを送信
+  // メタプロンプト（meta）は ax を使わず、Gemini 直呼び出しで実行する
+  if (improvementMethod === "meta") {
+    return generateText(prompt, { timeoutMs: PROMPT_IMPROVE_TIMEOUT_MS });
+  }
+
+  // ax の場合: few-shot / GEPA フォールバック経路で ax() シグネチャを使用
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_APIKEY ?? "";
   if (!apiKey) {
     throw new AppError(

@@ -6,7 +6,10 @@ import {
 } from "@/lib/contracts/generateEvaluate";
 import { AppError } from "@/lib/errors";
 import { generateTargetPromptImprovement } from "@/lib/application/targetPromptImproveUseCase";
-import { loadTargetFailuresForPromptOptimization } from "@/lib/application/promptOptimization/gepaDataLoader";
+import {
+  loadTargetExamplesForFewShot,
+  loadTargetFailuresForPromptOptimization
+} from "@/lib/application/promptOptimization/gepaDataLoader";
 
 function jsonError(status: number, code: ErrorCode, message: string) {
   return NextResponse.json({ error: { code, message } }, { status });
@@ -32,15 +35,21 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const failedRecords = await loadTargetFailuresForPromptOptimization(
-      parsed.data.domain,
-      parsed.data.failedLimit,
-      parsed.data.minScore
-    );
+    const failedRecords =
+      parsed.data.llmProvider === "ax" && parsed.data.improvementMethod === "fewshot"
+        ? await loadTargetExamplesForFewShot(
+            parsed.data.domain,
+            parsed.data.failedLimit
+          )
+        : await loadTargetFailuresForPromptOptimization(
+            parsed.data.domain,
+            parsed.data.failedLimit,
+            parsed.data.minScore
+          );
 
     const result = await generateTargetPromptImprovement(failedRecords, parsed.data.domain, {
       llmProvider: parsed.data.llmProvider,
-      axMethod: parsed.data.axMethod
+      improvementMethod: parsed.data.improvementMethod
     });
 
     const response = TargetPromptImproveResponseSchema.parse(result);

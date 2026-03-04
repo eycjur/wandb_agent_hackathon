@@ -5,6 +5,7 @@ import type { EvaluationLogRecord } from "@/lib/infrastructure/evaluationLogStor
 const mockGetDomainPromptConfig = vi.fn();
 const mockGenerateTextForPromptImprovement = vi.fn();
 const mockOptimizeTargetPromptWithGEPA = vi.fn();
+const mockOptimizeTargetPromptWithFewShot = vi.fn();
 
 vi.mock("@/lib/config/domainPromptLoader", async (importOriginal) => {
   const actual =
@@ -23,6 +24,11 @@ vi.mock("@/lib/infrastructure/promptImproveGenerator", () => ({
 vi.mock("@/lib/infrastructure/ax/axGepaTargetOptimizer", () => ({
   optimizeTargetPromptWithGEPA: (...args: unknown[]) =>
     mockOptimizeTargetPromptWithGEPA(...args)
+}));
+
+vi.mock("@/lib/infrastructure/ax/axFewShotTargetOptimizer", () => ({
+  optimizeTargetPromptWithFewShot: (...args: unknown[]) =>
+    mockOptimizeTargetPromptWithFewShot(...args)
 }));
 
 const failedRecords: EvaluationLogRecord[] = [
@@ -98,7 +104,7 @@ describe("generateTargetPromptImprovement", () => {
     const result = await generateTargetPromptImprovement(
       failedRecords,
       "resume_summary",
-      { llmProvider: "ax", axMethod: "gepa" }
+      { llmProvider: "ax", improvementMethod: "gepa" }
     );
 
     expect(result.resultSource).toBe("gepa");
@@ -107,33 +113,28 @@ describe("generateTargetPromptImprovement", () => {
     expect(mockGenerateTextForPromptImprovement).not.toHaveBeenCalled();
   });
 
-  it("ax/gepaが2段とも失敗した場合は通常改善へフォールバックする", async () => {
+  it("ax/gepa失敗時は再試行せずエラーを投げる", async () => {
     mockOptimizeTargetPromptWithGEPA.mockRejectedValue(
       new AppError(504, "PROVIDER_TIMEOUT", "GEPA timeout", "timeout")
-    );
-    mockGenerateTextForPromptImprovement.mockResolvedValue(
-      "【分析サマリー】fallback summary\n【改善案】fallback suggestion"
     );
 
     const { generateTargetPromptImprovement } = await import(
       "@/lib/application/targetPromptImproveUseCase"
     );
 
-    const result = await generateTargetPromptImprovement(
+    const error = await generateTargetPromptImprovement(
       failedRecords,
       "resume_summary",
-      { llmProvider: "ax", axMethod: "gepa" }
-    );
+      { llmProvider: "ax", improvementMethod: "gepa" }
+    ).catch((e) => e);
 
-    expect(result.resultSource).toBe("fallback");
-    expect(result.analysisSummary).toBe("fallback summary");
-    expect(result.suggestion).toBe("fallback suggestion");
-    expect(mockOptimizeTargetPromptWithGEPA).toHaveBeenCalledTimes(2);
-    expect(result.degradedReason).toContain("stage1:");
-    expect(result.degradedReason).toContain("stage2:");
+    expect(error).toBeInstanceOf(AppError);
+    expect(error.code).toBe("PROVIDER_TIMEOUT");
+    expect(mockOptimizeTargetPromptWithGEPA).toHaveBeenCalledTimes(1);
+    expect(mockGenerateTextForPromptImprovement).not.toHaveBeenCalled();
   });
 
-  it("ax/gepaで1段目失敗・2段目成功ならGEPA結果を返す", async () => {
+  it("ax/gepaは再試行しないため、2回目の成功モックがあっても1回目失敗で終了する", async () => {
     mockOptimizeTargetPromptWithGEPA
       .mockRejectedValueOnce(
         new AppError(504, "PROVIDER_TIMEOUT", "GEPA timeout", "timeout")
@@ -147,19 +148,19 @@ describe("generateTargetPromptImprovement", () => {
       "@/lib/application/targetPromptImproveUseCase"
     );
 
-    const result = await generateTargetPromptImprovement(
+    const error = await generateTargetPromptImprovement(
       failedRecords,
       "resume_summary",
-      { llmProvider: "ax", axMethod: "gepa" }
-    );
+      { llmProvider: "ax", improvementMethod: "gepa" }
+    ).catch((e) => e);
 
-    expect(result.resultSource).toBe("gepa");
-    expect(result.suggestion).toBe("gepa suggestion stage2");
-    expect(mockOptimizeTargetPromptWithGEPA).toHaveBeenCalledTimes(2);
+    expect(error).toBeInstanceOf(AppError);
+    expect(error.code).toBe("PROVIDER_TIMEOUT");
+    expect(mockOptimizeTargetPromptWithGEPA).toHaveBeenCalledTimes(1);
     expect(mockGenerateTextForPromptImprovement).not.toHaveBeenCalled();
   });
 
-  it("ax/gepa成功結果は同一入力ならキャッシュヒットする", async () => {
+  it("ax/gepa成功結果は同一入力でも毎回最適化を実行する", async () => {
     mockOptimizeTargetPromptWithGEPA.mockResolvedValue({
       suggestion: "cached gepa suggestion",
       analysisSummary: "cached gepa summary"
@@ -172,24 +173,25 @@ describe("generateTargetPromptImprovement", () => {
     const first = await generateTargetPromptImprovement(
       failedRecords,
       "resume_summary",
-      { llmProvider: "ax", axMethod: "gepa" }
+      { llmProvider: "ax", improvementMethod: "gepa" }
     );
     const second = await generateTargetPromptImprovement(
       failedRecords,
       "resume_summary",
-      { llmProvider: "ax", axMethod: "gepa" }
+      { llmProvider: "ax", improvementMethod: "gepa" }
     );
 
     expect(first.resultSource).toBe("gepa");
     expect(second.resultSource).toBe("gepa");
     expect(second.suggestion).toBe("cached gepa suggestion");
-    expect(mockOptimizeTargetPromptWithGEPA).toHaveBeenCalledTimes(1);
+    expect(mockOptimizeTargetPromptWithGEPA).toHaveBeenCalledTimes(2);
   });
 
   it("non-GEPA実行時はstandard結果を返す", async () => {
-    mockGenerateTextForPromptImprovement.mockResolvedValue(
-      "【分析サマリー】standard summary\n【改善案】standard suggestion"
-    );
+    mockOptimizeTargetPromptWithFewShot.mockResolvedValue({
+      suggestion: "few-shot suggestion",
+      analysisSummary: "few-shot summary"
+    });
 
     const { generateTargetPromptImprovement } = await import(
       "@/lib/application/targetPromptImproveUseCase"
@@ -198,10 +200,12 @@ describe("generateTargetPromptImprovement", () => {
     const result = await generateTargetPromptImprovement(
       failedRecords,
       "resume_summary",
-      { llmProvider: "ax", axMethod: "few-shot" }
+      { llmProvider: "ax", improvementMethod: "fewshot" }
     );
 
     expect(result.resultSource).toBe("standard");
-    expect(result.suggestion).toBe("standard suggestion");
+    expect(result.suggestion).toBe("few-shot suggestion");
+    expect(mockOptimizeTargetPromptWithFewShot).toHaveBeenCalledTimes(1);
+    expect(mockGenerateTextForPromptImprovement).not.toHaveBeenCalled();
   });
 });

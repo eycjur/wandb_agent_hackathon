@@ -36,7 +36,7 @@ describe("GET /api/gepa-jobs/[jobId]", () => {
       domain: "resume_summary",
       status: "succeeded",
       llmProvider: "ax",
-      axMethod: "gepa",
+      improvementMethod: "gepa",
       feedbackLimit: 10,
       failedLimit: 10,
       createdAt: "2026-03-01T00:00:00.000Z",

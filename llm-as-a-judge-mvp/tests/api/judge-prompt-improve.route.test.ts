@@ -57,7 +57,7 @@ describe("POST /api/judge-prompt/improve", () => {
     const request = new Request("http://localhost/api/judge-prompt/improve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domain: "resume_summary" })
+      body: JSON.stringify({ domain: "resume_summary", improvementMethod: "meta" })
     });
 
     const response = await POST(request as never);
@@ -79,7 +79,11 @@ describe("POST /api/judge-prompt/improve", () => {
     const request = new Request("http://localhost/api/judge-prompt/improve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domain: "resume_summary", feedbackLimit: 5 })
+      body: JSON.stringify({
+        domain: "resume_summary",
+        feedbackLimit: 5,
+        improvementMethod: "meta"
+      })
     });
 
     await POST(request as never);

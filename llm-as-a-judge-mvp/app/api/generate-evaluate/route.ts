@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 
   const provider = getLLMProvider({
     llmProvider: parsedRequest.data.llmProvider,
-    axMethod: parsedRequest.data.axMethod
+    improvementMethod: parsedRequest.data.improvementMethod
   });
   const useCase = new GenerateAndEvaluateUseCase(provider);
 

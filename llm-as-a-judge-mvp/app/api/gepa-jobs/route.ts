@@ -29,11 +29,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (parsed.data.llmProvider !== "ax" || parsed.data.axMethod !== "gepa") {
+  if (parsed.data.llmProvider !== "ax" || parsed.data.improvementMethod !== "gepa") {
     return jsonError(
       400,
       "VALIDATION_ERROR",
-      "GEPA ジョブは llmProvider=ax かつ axMethod=gepa で実行してください。"
+      "GEPA ジョブは llmProvider=ax かつ improvementMethod=gepa で実行してください。"
     );
   }
 
