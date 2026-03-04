@@ -184,13 +184,6 @@ export function scoreTargetOutputFormat(output: string, domain: DomainId): numbe
   return clamp01(lineScore * 0.4 + structureSignal * 0.35 + hasNumber * 0.15 + lengthScore * 0.1);
 }
 
-/**
- * Target GEPA 用の複合メトリクス
- * - 絶対スコア
- * - ベースラインからの改善幅
- * - 合格到達
- * - ドメイン形式適合
- */
 export function calculateTargetGepaMetric(
   predictedScore: unknown,
   generatedOutput: string,

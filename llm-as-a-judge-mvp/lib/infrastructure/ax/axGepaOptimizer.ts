@@ -8,11 +8,7 @@ import { getDomainPromptConfig } from "@/lib/config/domainPromptLoader";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
 import { GEPA_MODEL } from "@/lib/config/llm";
 import type { HumanFeedbackRecord } from "@/lib/infrastructure/humanFeedbackStore";
-import {
-  buildRubricKeywords,
-  calculateJudgeGepaMetricBreakdown,
-  type JudgeGepaMetricExample
-} from "@/lib/application/promptOptimization/gepaMetrics";
+import type { JudgeGepaMetricExample } from "@/lib/application/promptOptimization/gepaMetrics";
 import {
   type GepaCompileBudget,
   GEPA_JUDGE_FAST_UI_BUDGET,
@@ -29,6 +25,28 @@ import {
 export interface GepaJudgeOptimizationResult {
   suggestion: string;
   analysisSummary: string;
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
+function toScore(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(Math.max(Math.round(n), 0), 5);
+}
+
+function reasonLengthScoreHalf(reason: unknown): number {
+  const text = typeof reason === "string" ? reason.trim() : "";
+  const len = text.length;
+  if (len === 0) return 0;
+  const base = len < 20 ? clamp01(len / 20) : len <= 220 ? 1 : clamp01(1 - (len - 220) / 280);
+  // 指定: 理由文長さは 1/2 スケール
+  return clamp01(base / 2);
 }
 
 /**
@@ -65,8 +83,6 @@ export async function optimizeJudgePromptWithGEPA(
     { description: promptConfig.judgeInstruction }
   );
 
-  const rubricKeywords = buildRubricKeywords(promptConfig.judgeRubric);
-
   const examples = withJudgeResult.slice(0, budget.maxExamples).map((r) => ({
     userInput: truncateForGepa(r.userInput, budget.maxInputChars),
     generatedOutput: truncateForGepa(r.generatedOutput, budget.maxOutputChars),
@@ -81,15 +97,13 @@ export async function optimizeJudgePromptWithGEPA(
   const metricFn = (arg: Readonly<{ prediction: unknown; example: unknown }>): Record<string, number> => {
     const pred = arg.prediction as { score?: unknown; reason?: unknown };
     const ex = arg.example as JudgeGepaMetricExample;
-    const breakdown = calculateJudgeGepaMetricBreakdown(
-      { score: pred?.score, reason: pred?.reason },
-      {
-        humanScore: Number(ex?.humanScore ?? 0),
-        passThreshold: Number(ex?.passThreshold ?? promptConfig.passThreshold),
-        humanComment: ex?.humanComment
-      },
-      rubricKeywords
-    );
+    const predictedScore = toScore(pred?.score);
+    const humanScore = toScore(ex?.humanScore ?? 0);
+    const scoreAgreement = clamp01(1 - Math.abs(predictedScore - humanScore) / 5);
+    const breakdown = {
+      scoreAgreement,
+      reasonLengthHalf: reasonLengthScoreHalf(pred?.reason)
+    };
     logMetric(breakdown);
     return breakdown;
   };

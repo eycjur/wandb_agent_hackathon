@@ -9,7 +9,7 @@ import type { DomainId } from "@/lib/config/domainPromptLoader";
 import { GEPA_MODEL, JUDGE_MODEL, TARGET_MODEL } from "@/lib/config/llm";
 import type { EvaluationLogRecord } from "@/lib/infrastructure/evaluationLogStore";
 import {
-  calculateTargetGepaMetricBreakdown,
+  scoreTargetOutputFormat,
   type TargetGepaMetricExample
 } from "@/lib/application/promptOptimization/gepaMetrics";
 import {
@@ -118,9 +118,7 @@ export async function optimizeTargetPromptWithGEPA(
     if (!output) {
       const zero = {
         absoluteQuality: 0,
-        improvementDelta: 0,
-        passReached: 0,
-        formatScore: 0
+        domainFormatFitHalf: 0
       };
       logMetric(zero);
       return zero;
@@ -144,16 +142,16 @@ export async function optimizeTargetPromptWithGEPA(
         reason: typeof judgeResult.reason === "string" ? judgeResult.reason : ""
       });
 
-      const breakdown = calculateTargetGepaMetricBreakdown(
-        judgeResult.score,
-        output,
-        {
-        userInput,
-        passThreshold: Number(ex?.passThreshold ?? 4),
-        baselineScore: Number(ex?.baselineScore ?? 0),
-        domain: ex?.domain ?? domain
-        }
-      );
+      const rawScore = Number(judgeResult.score);
+      const absoluteQuality = Number.isFinite(rawScore)
+        ? Math.max(0, Math.min(1, rawScore / 5))
+        : 0;
+      const formatScore = scoreTargetOutputFormat(output, ex?.domain ?? domain);
+      // 形式適合は 1/2 スケールで評価する
+      const breakdown = {
+        absoluteQuality,
+        domainFormatFitHalf: Math.max(0, Math.min(1, formatScore / 2))
+      };
       logMetric(breakdown);
       return breakdown;
     } catch (error) {
