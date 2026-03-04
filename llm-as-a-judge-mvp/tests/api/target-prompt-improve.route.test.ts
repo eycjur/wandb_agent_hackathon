@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockLoadTargetFailuresForPromptOptimization = vi.fn();
+const mockLoadTargetExamplesForFewShot = vi.fn();
 const mockGenerateTargetPromptImprovement = vi.fn();
 
 vi.mock("@/lib/application/promptOptimization/gepaDataLoader", () => ({
+  loadTargetExamplesForFewShot: (...args: unknown[]) =>
+    mockLoadTargetExamplesForFewShot(...args),
   loadTargetFailuresForPromptOptimization: (...args: unknown[]) =>
     mockLoadTargetFailuresForPromptOptimization(...args)
 }));
@@ -32,6 +35,7 @@ describe("POST /api/target-prompt/improve", () => {
         createdAt: "2024-01-01T00:00:00.000Z"
       }
     ]);
+    mockLoadTargetExamplesForFewShot.mockResolvedValue([]);
     mockGenerateTargetPromptImprovement.mockResolvedValue({
       suggestion: "改善版の target instruction テキスト",
       analysisSummary: "実績の数値化が不足している",
@@ -61,7 +65,7 @@ describe("POST /api/target-prompt/improve", () => {
     const request = new Request("http://localhost/api/target-prompt/improve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domain: "resume_summary" })
+      body: JSON.stringify({ domain: "resume_summary", improvementMethod: "meta" })
     });
 
     const response = await POST(request as never);
@@ -87,7 +91,8 @@ describe("POST /api/target-prompt/improve", () => {
       body: JSON.stringify({
         domain: "resume_summary",
         failedLimit: 5,
-        minScore: 3
+        minScore: 3,
+        improvementMethod: "meta"
       })
     });
 

@@ -101,6 +101,27 @@ export function calculateJudgeGepaMetric(
   example: JudgeGepaMetricExample,
   rubricKeywords: string[]
 ): number {
+  const breakdown = calculateJudgeGepaMetricBreakdown(
+    prediction,
+    example,
+    rubricKeywords
+  );
+  return clamp01(
+    breakdown.scoreAgreement * JUDGE_METRIC_WEIGHTS.scoreAgreement +
+      breakdown.passAgreement * JUDGE_METRIC_WEIGHTS.passAgreement +
+      breakdown.reasonQuality * JUDGE_METRIC_WEIGHTS.reasonQuality
+  );
+}
+
+export function calculateJudgeGepaMetricBreakdown(
+  prediction: { score?: unknown; reason?: unknown },
+  example: JudgeGepaMetricExample,
+  rubricKeywords: string[]
+): {
+  scoreAgreement: number;
+  passAgreement: number;
+  reasonQuality: number;
+} {
   const predictedScore = toScore(prediction.score);
   const humanScore = toScore(example.humanScore);
   const passThreshold = Math.min(Math.max(Number(example.passThreshold), 0), SCORE_MAX);
@@ -112,11 +133,11 @@ export function calculateJudgeGepaMetric(
     rubricKeywords,
     example.humanComment
   );
-  return clamp01(
-    scoreAgreement * JUDGE_METRIC_WEIGHTS.scoreAgreement +
-      passAgreement * JUDGE_METRIC_WEIGHTS.passAgreement +
-      reasonQuality * JUDGE_METRIC_WEIGHTS.reasonQuality
-  );
+  return {
+    scoreAgreement,
+    passAgreement,
+    reasonQuality
+  };
 }
 
 function countSentences(text: string): number {
@@ -175,6 +196,29 @@ export function calculateTargetGepaMetric(
   generatedOutput: string,
   example: TargetGepaMetricExample
 ): number {
+  const breakdown = calculateTargetGepaMetricBreakdown(
+    predictedScore,
+    generatedOutput,
+    example
+  );
+  return clamp01(
+    breakdown.absoluteQuality * TARGET_METRIC_WEIGHTS.absoluteQuality +
+      breakdown.improvementDelta * TARGET_METRIC_WEIGHTS.improvementDelta +
+      breakdown.passReached * TARGET_METRIC_WEIGHTS.passReached +
+      breakdown.formatScore * TARGET_METRIC_WEIGHTS.formatScore
+  );
+}
+
+export function calculateTargetGepaMetricBreakdown(
+  predictedScore: unknown,
+  generatedOutput: string,
+  example: TargetGepaMetricExample
+): {
+  absoluteQuality: number;
+  improvementDelta: number;
+  passReached: number;
+  formatScore: number;
+} {
   const score = toScore(predictedScore);
   const passThreshold = Math.min(Math.max(Number(example.passThreshold), 0), SCORE_MAX);
   const baselineScore = toScore(example.baselineScore);
@@ -186,10 +230,10 @@ export function calculateTargetGepaMetric(
   const passReached = score >= passThreshold ? 1 : 0;
   const formatScore = scoreTargetOutputFormat(generatedOutput, example.domain);
 
-  return clamp01(
-    absoluteQuality * TARGET_METRIC_WEIGHTS.absoluteQuality +
-      improvementDelta * TARGET_METRIC_WEIGHTS.improvementDelta +
-      passReached * TARGET_METRIC_WEIGHTS.passReached +
-      formatScore * TARGET_METRIC_WEIGHTS.formatScore
-  );
+  return {
+    absoluteQuality,
+    improvementDelta,
+    passReached,
+    formatScore
+  };
 }

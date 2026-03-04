@@ -69,7 +69,7 @@ describe("GepaJobService", () => {
       feedbackLimit: 10,
       failedLimit: 10,
       llmProvider: "ax",
-      axMethod: "gepa"
+      improvementMethod: "gepa"
     });
 
     expect(["queued", "running"]).toContain(job.status);
@@ -97,7 +97,7 @@ describe("GepaJobService", () => {
             domain: "resume_summary",
             status: "running",
             llmProvider: "ax",
-            axMethod: "gepa",
+            improvementMethod: "gepa",
             feedbackLimit: 10,
             failedLimit: 10,
             createdAt: "2026-03-01T00:00:00.000Z"
@@ -157,7 +157,7 @@ describe("GepaJobService", () => {
             domain: "resume_summary",
             status: "queued",
             llmProvider: "ax",
-            axMethod: "gepa",
+            improvementMethod: "gepa",
             feedbackLimit: 999,
             failedLimit: 10,
             minScore: 3,
@@ -169,7 +169,7 @@ describe("GepaJobService", () => {
             domain: "resume_summary",
             status: "queued",
             llmProvider: "ax",
-            axMethod: "gepa",
+            improvementMethod: "gepa",
             feedbackLimit: 10,
             failedLimit: 0,
             minScore: 3,
@@ -181,7 +181,7 @@ describe("GepaJobService", () => {
             domain: "resume_summary",
             status: "queued",
             llmProvider: "ax",
-            axMethod: "gepa",
+            improvementMethod: "gepa",
             feedbackLimit: 10,
             failedLimit: 10,
             minScore: 6,
@@ -193,7 +193,7 @@ describe("GepaJobService", () => {
             domain: "resume_summary",
             status: "queued",
             llmProvider: "ax",
-            axMethod: "gepa",
+            improvementMethod: "gepa",
             feedbackLimit: 50,
             failedLimit: 1,
             minScore: 0,
@@ -277,7 +277,7 @@ describe("GepaJobService", () => {
             domain: "resume_summary",
             status: "queued",
             llmProvider: "ax",
-            axMethod: "gepa",
+            improvementMethod: "gepa",
             feedbackLimit: 50,
             failedLimit: 1,
             minScore: 5,
@@ -289,7 +289,7 @@ describe("GepaJobService", () => {
             domain: "resume_summary",
             status: "queued",
             llmProvider: "ax",
-            axMethod: "gepa",
+            improvementMethod: "gepa",
             feedbackLimit: 1,
             failedLimit: 50,
             minScore: 5,
@@ -378,7 +378,7 @@ describe("GepaJobService", () => {
         feedbackLimit: 10,
         failedLimit: 10,
         llmProvider: "gemini",
-        axMethod: "few-shot"
+        improvementMethod: "fewshot"
       })
     ).toThrowError(/VALIDATION_ERROR|GEPA ジョブ/);
   });

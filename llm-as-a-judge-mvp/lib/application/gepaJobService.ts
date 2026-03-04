@@ -10,7 +10,7 @@ import type {
   GepaJobKind,
   GepaJobStatus,
   LLMProviderId,
-  AxMethodId
+  ImprovementMethodId
 } from "@/lib/contracts/generateEvaluate";
 import {
   generateJudgePromptImprovement,
@@ -43,7 +43,7 @@ const VALID_STATUSES: GepaJobStatus[] = [
   "canceled"
 ];
 const VALID_PROVIDERS: LLMProviderId[] = ["ax", "gemini"];
-const VALID_AX_METHODS: AxMethodId[] = ["signature", "few-shot", "gepa"];
+const VALID_IMPROVEMENT_METHODS: ImprovementMethodId[] = ["meta", "fewshot", "gepa"];
 
 type GepaJobResult = JudgePromptImprovementResult | TargetPromptImprovementResult;
 
@@ -58,7 +58,7 @@ export type GepaJobRecord = {
   domain: DomainId;
   status: GepaJobStatus;
   llmProvider: LLMProviderId;
-  axMethod: AxMethodId;
+  improvementMethod: ImprovementMethodId;
   feedbackLimit: number;
   failedLimit: number;
   minScore?: number;
@@ -102,12 +102,12 @@ export type GepaJobServiceOptions = {
   optimizeJudge?: (
     feedbackRecords: HumanFeedbackRecord[],
     domain: DomainId,
-    options: { llmProvider: LLMProviderId; axMethod: AxMethodId }
+    options: { llmProvider: LLMProviderId; improvementMethod: ImprovementMethodId }
   ) => Promise<JudgePromptImprovementResult>;
   optimizeTarget?: (
     failedRecords: EvaluationLogRecord[],
     domain: DomainId,
-    options: { llmProvider: LLMProviderId; axMethod: AxMethodId }
+    options: { llmProvider: LLMProviderId; improvementMethod: ImprovementMethodId }
   ) => Promise<TargetPromptImprovementResult>;
 };
 
@@ -155,7 +155,7 @@ function toPersistedJobRecord(raw: unknown): PersistedJobParseResult {
   const domain = raw.domain;
   const status = raw.status;
   const llmProvider = raw.llmProvider;
-  const axMethod = raw.axMethod;
+  const improvementMethod = raw.improvementMethod;
   const feedbackLimit = Number(raw.feedbackLimit);
   const failedLimit = Number(raw.failedLimit);
   const minScore =
@@ -212,8 +212,8 @@ function toPersistedJobRecord(raw: unknown): PersistedJobParseResult {
   if (!VALID_PROVIDERS.includes(llmProvider as LLMProviderId)) {
     return { job: null, jobId: jobIdForLog, reason: "invalid llmProvider" };
   }
-  if (!VALID_AX_METHODS.includes(axMethod as AxMethodId)) {
-    return { job: null, jobId: jobIdForLog, reason: "invalid axMethod" };
+  if (!VALID_IMPROVEMENT_METHODS.includes(improvementMethod as ImprovementMethodId)) {
+    return { job: null, jobId: jobIdForLog, reason: "invalid improvementMethod" };
   }
   if (!isIntegerInRange(feedbackLimit, MIN_RECORD_LIMIT, MAX_RECORD_LIMIT)) {
     return {
@@ -250,7 +250,7 @@ function toPersistedJobRecord(raw: unknown): PersistedJobParseResult {
       domain: domain as DomainId,
       status: status as GepaJobStatus,
       llmProvider: llmProvider as LLMProviderId,
-      axMethod: axMethod as AxMethodId,
+      improvementMethod: improvementMethod as ImprovementMethodId,
       feedbackLimit,
       failedLimit,
       minScore,
@@ -285,12 +285,12 @@ export class GepaJobService {
   private readonly optimizeJudgeImpl: (
     feedbackRecords: HumanFeedbackRecord[],
     domain: DomainId,
-    options: { llmProvider: LLMProviderId; axMethod: AxMethodId }
+    options: { llmProvider: LLMProviderId; improvementMethod: ImprovementMethodId }
   ) => Promise<JudgePromptImprovementResult>;
   private readonly optimizeTargetImpl: (
     failedRecords: EvaluationLogRecord[],
     domain: DomainId,
-    options: { llmProvider: LLMProviderId; axMethod: AxMethodId }
+    options: { llmProvider: LLMProviderId; improvementMethod: ImprovementMethodId }
   ) => Promise<TargetPromptImprovementResult>;
 
   constructor(options: GepaJobServiceOptions = {}) {
@@ -320,11 +320,11 @@ export class GepaJobService {
   }
 
   enqueue(input: GepaJobEnqueueRequest): GepaJobRecord {
-    if (input.llmProvider !== "ax" || input.axMethod !== "gepa") {
+    if (input.llmProvider !== "ax" || input.improvementMethod !== "gepa") {
       throw new AppError(
         400,
         "VALIDATION_ERROR",
-        "GEPA ジョブは llmProvider=ax かつ axMethod=gepa でのみ実行できます。"
+        "GEPA ジョブは llmProvider=ax かつ improvementMethod=gepa でのみ実行できます。"
       );
     }
     if (
@@ -346,7 +346,7 @@ export class GepaJobService {
       domain: input.domain,
       status: "queued",
       llmProvider: input.llmProvider,
-      axMethod: input.axMethod,
+      improvementMethod: input.improvementMethod,
       feedbackLimit: input.feedbackLimit,
       failedLimit: input.failedLimit,
       minScore: input.minScore,
@@ -416,7 +416,7 @@ export class GepaJobService {
     );
     return this.optimizeJudgeImpl(feedbackRecords, job.domain, {
       llmProvider: job.llmProvider,
-      axMethod: job.axMethod
+      improvementMethod: job.improvementMethod
     });
   }
 
@@ -430,7 +430,7 @@ export class GepaJobService {
     );
     return this.optimizeTargetImpl(failedRecords, job.domain, {
       llmProvider: job.llmProvider,
-      axMethod: job.axMethod
+      improvementMethod: job.improvementMethod
     });
   }
 

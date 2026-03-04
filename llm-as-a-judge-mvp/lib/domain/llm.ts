@@ -1,9 +1,9 @@
 import type { DomainId } from "@/lib/config/domainPromptLoader";
-import type { AxMethodId, LLMProviderId } from "@/lib/contracts/generateEvaluate";
+import type { ImprovementMethodId, LLMProviderId } from "@/lib/contracts/generateEvaluate";
 
 export type LLMProviderOptions = {
   llmProvider?: LLMProviderId;
-  axMethod?: AxMethodId;
+  improvementMethod?: ImprovementMethodId;
 };
 
 export type JudgeResult = {

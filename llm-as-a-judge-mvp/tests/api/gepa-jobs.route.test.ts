@@ -43,7 +43,7 @@ describe("POST /api/gepa-jobs", () => {
         kind: "judge",
         domain: "resume_summary",
         llmProvider: "gemini",
-        axMethod: "few-shot"
+        improvementMethod: "fewshot"
       })
     });
 
@@ -64,7 +64,7 @@ describe("POST /api/gepa-jobs", () => {
         kind: "judge",
         domain: "resume_summary",
         llmProvider: "ax",
-        axMethod: "gepa"
+        improvementMethod: "gepa"
       })
     });
 
@@ -83,7 +83,7 @@ describe("POST /api/gepa-jobs", () => {
         feedbackLimit: 10,
         failedLimit: 10,
         llmProvider: "ax",
-        axMethod: "gepa"
+        improvementMethod: "gepa"
       })
     );
   });

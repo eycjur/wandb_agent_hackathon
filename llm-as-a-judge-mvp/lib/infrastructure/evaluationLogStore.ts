@@ -65,6 +65,11 @@ export interface ListFailedEvaluationsOptions {
   minScore?: number;
 }
 
+export interface ListEvaluationLogsOptions {
+  domain?: DomainId;
+  limit?: number;
+}
+
 export async function listFailedEvaluations(
   options: ListFailedEvaluationsOptions = {}
 ): Promise<EvaluationLogRecord[]> {
@@ -80,5 +85,20 @@ export async function listFailedEvaluations(
   result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const limit = options.limit ?? 10;
+  return result.slice(0, limit);
+}
+
+export async function listEvaluationLogs(
+  options: ListEvaluationLogsOptions = {}
+): Promise<EvaluationLogRecord[]> {
+  let result = [...records];
+
+  if (options.domain) {
+    result = result.filter((r) => r.domain === options.domain);
+  }
+
+  result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const limit = options.limit ?? 50;
   return result.slice(0, limit);
 }

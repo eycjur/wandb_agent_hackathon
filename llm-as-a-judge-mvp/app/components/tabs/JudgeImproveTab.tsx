@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
-import type { AxMethodId, LLMProviderId } from "@/lib/contracts/generateEvaluate";
+import type { ImprovementMethodId } from "@/lib/contracts/generateEvaluate";
 import { ProgressPanel, COMMON_PROGRESS_STEPS } from "@/app/components/ProgressPanel";
 import { PromptDiffView } from "@/app/components/PromptDiffView";
 import { ExpandableTextCell } from "@/app/components/ExpandableTextCell";
@@ -34,16 +34,22 @@ type WeaveHumanFeedbackRecord = {
 };
 
 export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprovementGenerated }: Props) {
-  const [llmProvider, setLlmProvider] = useState<LLMProviderId>("ax");
-  const [axMethod, setAxMethod] = useState<AxMethodId>("few-shot");
+  const [improvementMethod, setImprovementMethod] = useState<ImprovementMethodId>("meta");
   const [improvement, setImprovement] = useState<ImprovementResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingElapsedMs, setLoadingElapsedMs] = useState(0);
   const [publishLoading, setPublishLoading] = useState(false);
   const [error, setError] = useState("");
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
   const [wandbConfigured, setWandbConfigured] = useState(false);
   const [weaveData, setWeaveData] = useState<WeaveHumanFeedbackRecord[] | null>(null);
   const [weaveDataLoading, setWeaveDataLoading] = useState(false);
+  const improvementMethodDescription =
+    improvementMethod === "meta"
+      ? "LLMで改善プロンプトを作成します。"
+      : improvementMethod === "fewshot"
+        ? "実ログ例を使って改善プロンプトを調整します。"
+        : "GEPAでスコア一致・合否一致・理由品質を最適化します。";
 
   const handleFetchWeaveData = async () => {
     setWeaveDataLoading(true);
@@ -78,6 +84,18 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
     void loadWandbStatus();
   }, []);
 
+  useEffect(() => {
+    if (!loading) {
+      setLoadingElapsedMs(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const id = setInterval(() => {
+      setLoadingElapsedMs(Date.now() - startedAt);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [loading]);
+
   const handleGenerate = async () => {
     setLoading(true);
     setImprovement(null);
@@ -90,8 +108,8 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
         body: JSON.stringify({
           domain: selectedDomain,
           feedbackLimit: 10,
-          llmProvider,
-          axMethod
+          llmProvider: "ax",
+          improvementMethod
         })
       });
       const data = await res.json();
@@ -141,7 +159,12 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
   };
 
   const getJudgeImproveStatusMessage = (): string => {
-    if (loading) return "改善案を生成中です...";
+    if (loading) {
+      const elapsedSec = Math.floor(loadingElapsedMs / 1000);
+      if (improvementMethod === "fewshot") return `Few-shot 最適化中...（${elapsedSec}秒）`;
+      if (improvementMethod === "gepa") return `GEPA 最適化中...（${elapsedSec}秒）`;
+      return `メタプロンプト生成中...（${elapsedSec}秒）`;
+    }
     if (error) return error;
     if (publishMessage) return "Weave に反映しました。";
     if (improvement?.resultSource === "gepa") {
@@ -151,9 +174,6 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
       return "GEPA が失敗したため、通常生成で改善案を返しました。";
     }
     if (improvement) return "改善案が生成されました。Weave に反映するか、コピーしてご利用ください。";
-    if (llmProvider === "gemini") {
-      return "Gemini はデータを自動取得して改善案を生成します。「改善案を生成」を押してください。";
-    }
     if (weaveData === null) return "まず「Weave からデータを取得」を押してデータを取得してください。";
     if (weaveData.length === 0) return "取得したデータがありません。手動評価を蓄積してから再度取得してください。";
     return "データを取得しました。「改善案を生成」を押して Judge プロンプトの改善案を生成します。";
@@ -180,16 +200,22 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
           type="button"
           className="primaryButton"
           onClick={handleGenerate}
-          disabled={loading || !wandbConfigured || (llmProvider !== "gemini" && weaveData === null)}
+          disabled={loading || !wandbConfigured || weaveData === null}
           title={
             !wandbConfigured
               ? "まず W&B を設定してください"
-              : llmProvider !== "gemini" && weaveData === null
+              : weaveData === null
                 ? "まず「Weave からデータを取得」を実行してください"
                 : undefined
           }
         >
-          {loading ? "生成中..." : "改善案を生成"}
+          {loading
+            ? improvementMethod === "fewshot"
+              ? "Few-shot 最適化中..."
+              : improvementMethod === "gepa"
+                ? "GEPA 最適化中..."
+                : "生成中..."
+            : "改善案を生成"}
         </button>
       </div>
 
@@ -319,57 +345,40 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
       />
       </section>
 
-      <aside className="promptImproveOptions" role="group" aria-label="最適化手法オプション">
-        <h3>最適化手法</h3>
-        <div className="domainSelectorButtons">
-          <button
-            type="button"
-            className={`domainButton ${llmProvider === "ax" ? "active" : ""}`}
-            onClick={() => setLlmProvider("ax")}
-            aria-pressed={llmProvider === "ax"}
-          >
-            ax
-          </button>
-          <button
-            type="button"
-            className={`domainButton ${llmProvider === "gemini" ? "active" : ""}`}
-            onClick={() => setLlmProvider("gemini")}
-            aria-pressed={llmProvider === "gemini"}
-          >
-            Gemini
-          </button>
-        </div>
-        {llmProvider === "ax" && (
-          <div className="axMethodRow">
-            <span className="domainSelectorLabel">方法:</span>
-            <div className="domainSelectorButtons">
-              <button
-                type="button"
-                className={`domainButton ${axMethod === "signature" ? "active" : ""}`}
-                onClick={() => setAxMethod("signature")}
-                aria-pressed={axMethod === "signature"}
-              >
-                ゼロショット
-              </button>
-              <button
-                type="button"
-                className={`domainButton ${axMethod === "few-shot" ? "active" : ""}`}
-                onClick={() => setAxMethod("few-shot")}
-                aria-pressed={axMethod === "few-shot"}
-              >
-                Few-shot
-              </button>
-              <button
-                type="button"
-                className={`domainButton ${axMethod === "gepa" ? "active" : ""}`}
-                onClick={() => setAxMethod("gepa")}
-                aria-pressed={axMethod === "gepa"}
-              >
-                GEPA
-              </button>
-            </div>
+      <aside className="promptImproveOptions" role="group" aria-label="改善方式オプション">
+        <h3>改善方式</h3>
+        <div className="axMethodRow">
+          <span className="domainSelectorLabel">方式:</span>
+          <div className="domainSelectorButtons">
+            <button
+              type="button"
+              className={`domainButton ${improvementMethod === "meta" ? "active" : ""}`}
+              onClick={() => setImprovementMethod("meta")}
+              aria-pressed={improvementMethod === "meta"}
+            >
+              メタプロンプト
+            </button>
+            <button
+              type="button"
+              className={`domainButton ${improvementMethod === "fewshot" ? "active" : ""}`}
+              onClick={() => setImprovementMethod("fewshot")}
+              aria-pressed={improvementMethod === "fewshot"}
+            >
+              Few-shot
+            </button>
+            <button
+              type="button"
+              className={`domainButton ${improvementMethod === "gepa" ? "active" : ""}`}
+              onClick={() => setImprovementMethod("gepa")}
+              aria-pressed={improvementMethod === "gepa"}
+            >
+              多目的最適化
+            </button>
           </div>
-        )}
+          <p className="hintText" style={{ marginTop: 8 }}>
+            {improvementMethodDescription}
+          </p>
+        </div>
       </aside>
     </div>
   );

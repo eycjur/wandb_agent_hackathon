@@ -13,8 +13,8 @@ export const DomainIdSchema = z.enum(
 export const LLMProviderSchema = z.enum(["ax", "gemini"]);
 export type LLMProviderId = z.infer<typeof LLMProviderSchema>;
 
-export const AxMethodSchema = z.enum(["signature", "few-shot", "gepa"]);
-export type AxMethodId = z.infer<typeof AxMethodSchema>;
+export const ImprovementMethodSchema = z.enum(["meta", "fewshot", "gepa"]);
+export type ImprovementMethodId = z.infer<typeof ImprovementMethodSchema>;
 
 export const ErrorCodeSchema = z.enum([
   "INVALID_JSON",
@@ -34,7 +34,7 @@ export const GenerateEvaluateRequestSchema = z.object({
     .max(MAX_USER_INPUT_CHARS, `職務経歴入力は${MAX_USER_INPUT_CHARS}文字以内で入力してください。`),
   domain: DomainIdSchema.optional().default("resume_summary"),
   llmProvider: LLMProviderSchema.optional().default("ax"),
-  axMethod: AxMethodSchema.optional().default("few-shot")
+  improvementMethod: ImprovementMethodSchema.optional().default("meta")
 });
 
 export const GenerateRequestSchema = z.object({
@@ -45,7 +45,7 @@ export const GenerateRequestSchema = z.object({
     .max(MAX_USER_INPUT_CHARS, `職務経歴入力は${MAX_USER_INPUT_CHARS}文字以内で入力してください。`),
   domain: DomainIdSchema.optional().default("resume_summary"),
   llmProvider: LLMProviderSchema.optional().default("ax"),
-  axMethod: AxMethodSchema.optional().default("few-shot")
+  improvementMethod: ImprovementMethodSchema.optional().default("meta")
 });
 
 export const GenerateSuccessResponseSchema = z.object({
@@ -74,7 +74,7 @@ export const JudgeRequestSchema = z.object({
     ),
   domain: DomainIdSchema.optional().default("resume_summary"),
   llmProvider: LLMProviderSchema.optional().default("ax"),
-  axMethod: AxMethodSchema.optional().default("few-shot")
+  improvementMethod: ImprovementMethodSchema.optional().default("meta")
 });
 
 export const JudgeSuccessResponseSchema = z.object({
@@ -174,7 +174,7 @@ export const JudgePromptImproveRequestSchema = z.object({
   domain: DomainIdSchema,
   feedbackLimit: z.number().int().min(1).max(50).optional().default(10),
   llmProvider: LLMProviderSchema.optional().default("ax"),
-  axMethod: AxMethodSchema.optional().default("few-shot")
+  improvementMethod: ImprovementMethodSchema
 });
 
 export const JudgePromptImproveResponseSchema = z.object({
@@ -191,12 +191,13 @@ export const TargetPromptImproveRequestSchema = z.object({
   failedLimit: z.number().int().min(1).max(50).optional().default(10),
   minScore: z.number().int().min(0).max(5).optional(),
   llmProvider: LLMProviderSchema.optional().default("ax"),
-  axMethod: AxMethodSchema.optional().default("few-shot")
+  improvementMethod: ImprovementMethodSchema
 });
 
 export const TargetPromptImproveResponseSchema = z.object({
   suggestion: z.string(),
   analysisSummary: z.string(),
+  currentPrompt: z.string().optional(),
   resultSource: z.enum(["gepa", "fallback", "standard"]),
   degradedReason: z.string().optional()
 });
@@ -215,7 +216,7 @@ export const GepaJobEnqueueRequestSchema = z.object({
   failedLimit: z.number().int().min(1).max(50).optional().default(10),
   minScore: z.number().int().min(0).max(5).optional(),
   llmProvider: LLMProviderSchema.optional().default("ax"),
-  axMethod: AxMethodSchema.optional().default("gepa")
+  improvementMethod: ImprovementMethodSchema.optional().default("gepa")
 });
 
 export const GepaJobEnqueueResponseSchema = z.object({

@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
   try {
     const provider = getLLMProvider({
       llmProvider: parsedRequest.data.llmProvider,
-      axMethod: parsedRequest.data.axMethod
+      improvementMethod: parsedRequest.data.improvementMethod
     });
     const generatedOutput = await provider.generateOutput(
       parsedRequest.data.userInput,

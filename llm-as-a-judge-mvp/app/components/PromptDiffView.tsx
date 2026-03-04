@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { diffLines } from "diff";
 
 /**
@@ -12,9 +13,16 @@ type Props = {
   after: string;
   beforeLabel?: string;
   afterLabel?: string;
+  initialHeight?: number;
 };
 
-export function PromptDiffView({ before, after, beforeLabel = "現在のプロンプト", afterLabel = "改善案" }: Props) {
+export function PromptDiffView({
+  before,
+  after,
+  beforeLabel = "現在のプロンプト",
+  afterLabel = "改善案",
+  initialHeight = 320
+}: Props) {
   const diff = diffLines(before, after);
 
   type Row = { left: string; right: string; leftStyle: "removed" | "unchanged" | "empty"; rightStyle: "added" | "unchanged" | "empty" };
@@ -42,6 +50,14 @@ export function PromptDiffView({ before, after, beforeLabel = "現在のプロ�
     return {};
   };
 
+  const resizablePaneStyle: CSSProperties = {
+    height: initialHeight,
+    minHeight: 200,
+    maxHeight: 900,
+    resize: "vertical",
+    overflow: "auto"
+  };
+
   return (
     <div className="promptDiffView" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0, minWidth: 0, border: "1px solid var(--border)", borderRadius: "var(--radius)", overflow: "hidden" }}>
@@ -49,51 +65,51 @@ export function PromptDiffView({ before, after, beforeLabel = "現在のプロ�
           <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", fontSize: "0.9rem", color: "var(--text-muted)" }}>
             {beforeLabel}
           </div>
-          <pre
-            style={{
-              margin: 0,
-              padding: 12,
-              fontSize: "0.8rem",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              maxHeight: 320,
-              overflow: "auto",
-              fontFamily: "ui-monospace, monospace",
-              lineHeight: 1.6
-            }}
-          >
-            {rows.map((r, i) => (
-              <span key={i} style={{ display: "block", padding: "0 4px", ...cellStyle(r.leftStyle) }}>
-                {r.leftStyle === "removed" ? "- " : r.leftStyle === "unchanged" ? "  " : ""}
-                {r.left || "\u00A0"}
-              </span>
-            ))}
-          </pre>
+          <div style={resizablePaneStyle}>
+            <pre
+              style={{
+                margin: 0,
+                padding: 12,
+                fontSize: "0.8rem",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                fontFamily: "ui-monospace, monospace",
+                lineHeight: 1.6
+              }}
+            >
+              {rows.map((r, i) => (
+                <span key={i} style={{ display: "block", padding: "0 4px", ...cellStyle(r.leftStyle) }}>
+                  {r.leftStyle === "removed" ? "- " : r.leftStyle === "unchanged" ? "  " : ""}
+                  {r.left || "\u00A0"}
+                </span>
+              ))}
+            </pre>
+          </div>
         </div>
         <div>
           <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", fontSize: "0.9rem", color: "var(--text-muted)" }}>
             {afterLabel}
           </div>
-          <pre
-            style={{
-              margin: 0,
-              padding: 12,
-              fontSize: "0.8rem",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              maxHeight: 320,
-              overflow: "auto",
-              fontFamily: "ui-monospace, monospace",
-              lineHeight: 1.6
-            }}
-          >
-            {rows.map((r, i) => (
-              <span key={i} style={{ display: "block", padding: "0 4px", ...cellStyle(r.rightStyle) }}>
-                {r.rightStyle === "added" ? "+ " : r.rightStyle === "unchanged" ? "  " : ""}
-                {r.right || "\u00A0"}
-              </span>
-            ))}
-          </pre>
+          <div style={resizablePaneStyle}>
+            <pre
+              style={{
+                margin: 0,
+                padding: 12,
+                fontSize: "0.8rem",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                fontFamily: "ui-monospace, monospace",
+                lineHeight: 1.6
+              }}
+            >
+              {rows.map((r, i) => (
+                <span key={i} style={{ display: "block", padding: "0 4px", ...cellStyle(r.rightStyle) }}>
+                  {r.rightStyle === "added" ? "+ " : r.rightStyle === "unchanged" ? "  " : ""}
+                  {r.right || "\u00A0"}
+                </span>
+              ))}
+            </pre>
+          </div>
         </div>
       </div>
     </div>
