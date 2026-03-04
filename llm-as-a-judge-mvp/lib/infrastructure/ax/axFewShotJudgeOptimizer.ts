@@ -161,6 +161,12 @@ export async function optimizeJudgePromptWithFewShot(
       return 0;
     }
 
+    // humanScore=0 は必須条件を落としたケースとして扱い、非0予測は不一致を強く罰する
+    if (example.humanScore === 0 && predictedScore !== 0) {
+      logMetric(0);
+      return 0;
+    }
+
     const score = 1 - Math.min(1, Math.abs(predictedScore - example.humanScore) / 5);
     logMetric(score);
     return score;
