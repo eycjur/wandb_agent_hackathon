@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { diffLines } from "diff";
 
 /**
@@ -49,7 +50,7 @@ export function PromptDiffView({
     return {};
   };
 
-  const resizablePaneStyle = {
+  const resizablePaneStyle: CSSProperties = {
     height: initialHeight,
     minHeight: 200,
     maxHeight: 900,
