@@ -5,6 +5,7 @@ const mockFetchHumanFeedbackWithJudgeMerged = vi.fn();
 const mockFetchJudgeLogsFromWeave = vi.fn();
 const mockListHumanFeedback = vi.fn();
 const mockListFailedEvaluations = vi.fn();
+const mockListEvaluationLogs = vi.fn();
 const mockGetDomainPromptConfig = vi.fn();
 
 vi.mock("@/lib/infrastructure/weave/weaveClient", () => ({
@@ -22,7 +23,8 @@ vi.mock("@/lib/infrastructure/humanFeedbackStore", () => ({
 }));
 
 vi.mock("@/lib/infrastructure/evaluationLogStore", () => ({
-  listFailedEvaluations: (...args: unknown[]) => mockListFailedEvaluations(...args)
+  listFailedEvaluations: (...args: unknown[]) => mockListFailedEvaluations(...args),
+  listEvaluationLogs: (...args: unknown[]) => mockListEvaluationLogs(...args)
 }));
 
 vi.mock("@/lib/config/domainPromptLoader", async (importOriginal) => {
@@ -143,8 +145,84 @@ describe("gepaDataLoader", () => {
     expect(mockListFailedEvaluations).not.toHaveBeenCalled();
     expect(mockFetchJudgeLogsFromWeave).toHaveBeenCalledWith({
       domain: "resume_summary",
-      limit: 20,
+      limit: 100,
       throwOnError: true
     });
+  });
+
+  it("Weave成功時は不合格が1件以上あれば、合格データも含めて返す（target）", async () => {
+    mockIsWeaveConfigured.mockReturnValue(true);
+    mockFetchJudgeLogsFromWeave.mockResolvedValue([
+      {
+        id: "eval_0",
+        domain: "resume_summary",
+        userInput: "bad input",
+        generatedOutput: "bad output",
+        score: 2,
+        reason: "bad",
+        pass: false,
+        passThreshold: 4,
+        rubricVersion: 1,
+        createdAt: "2024-01-02T00:00:00.000Z"
+      },
+      {
+        id: "eval_1",
+        domain: "resume_summary",
+        userInput: "input",
+        generatedOutput: "output",
+        score: 5,
+        reason: "good",
+        pass: true,
+        passThreshold: 4,
+        rubricVersion: 1,
+        createdAt: "2024-01-01T00:00:00.000Z"
+      }
+    ]);
+
+    const { loadTargetFailuresForPromptOptimization } = await import(
+      "@/lib/application/promptOptimization/gepaDataLoader"
+    );
+
+    const records = await loadTargetFailuresForPromptOptimization(
+      "resume_summary",
+      10
+    );
+
+    expect(records).toHaveLength(2);
+    expect(records.some((r) => r.judgeResult.pass === false)).toBe(true);
+    expect(records.some((r) => r.judgeResult.pass === true)).toBe(true);
+    expect(mockListFailedEvaluations).not.toHaveBeenCalled();
+    expect(mockListEvaluationLogs).not.toHaveBeenCalled();
+  });
+
+  it("Weave成功時は不合格が0件なら空配列を返す（target）", async () => {
+    mockIsWeaveConfigured.mockReturnValue(true);
+    mockFetchJudgeLogsFromWeave.mockResolvedValue([
+      {
+        id: "eval_1",
+        domain: "resume_summary",
+        userInput: "input",
+        generatedOutput: "output",
+        score: 5,
+        reason: "good",
+        pass: true,
+        passThreshold: 4,
+        rubricVersion: 1,
+        createdAt: "2024-01-01T00:00:00.000Z"
+      }
+    ]);
+
+    const { loadTargetFailuresForPromptOptimization } = await import(
+      "@/lib/application/promptOptimization/gepaDataLoader"
+    );
+
+    const records = await loadTargetFailuresForPromptOptimization(
+      "resume_summary",
+      10
+    );
+
+    expect(records).toEqual([]);
+    expect(mockListFailedEvaluations).not.toHaveBeenCalled();
+    expect(mockListEvaluationLogs).not.toHaveBeenCalled();
   });
 });

@@ -39,10 +39,6 @@ type WeaveJudgeLogRecord = {
   createdAt: string;
 };
 
-function isTargetImproveCandidate(record: WeaveJudgeLogRecord): boolean {
-  return !record.pass || record.score < record.passThreshold;
-}
-
 export function TargetImproveTab({ selectedDomain, completedStepIndices, onImprovementGenerated }: Props) {
   const [improvementMethod, setImprovementMethod] = useState<ImprovementMethodId>("meta");
   const [improvement, setImprovement] = useState<TargetPromptImproveResponse | null>(null);
@@ -73,7 +69,7 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
       }
       const data = await res.json();
       const records = (data.records ?? []) as WeaveJudgeLogRecord[];
-      setWeaveData(records.filter(isTargetImproveCandidate));
+      setWeaveData(records);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Weave からの取得に失敗しました");
     } finally {
@@ -193,7 +189,7 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
       <section className="panel promptImprovePanel">
         <h2>生成プロンプト改善</h2>
       <p className="hintText">
-        評価ログから不合格・低スコアのケースを取得し、生成プロンプトの改善案を LLM で生成します。
+        評価ログ（合格データを含む）を取得し、生成プロンプトの改善案を LLM で生成します。
       </p>
 
       <div className="improveActions" style={{ marginTop: "16px", display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -227,7 +223,7 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
           <h3>Weave から取得したデータ（{weaveData.length} 件）</h3>
           {weaveData.length === 0 ? (
             <p className="hintText">
-              改善対象データがありません（全件合格・高スコア）。
+              改善対象データがありません。
               <a href="/api/weave/debug" target="_blank" rel="noopener noreferrer" style={{ marginLeft: 8 }}>
                 Weave 状態を確認
               </a>

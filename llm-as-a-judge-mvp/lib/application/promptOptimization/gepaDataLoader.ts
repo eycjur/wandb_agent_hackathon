@@ -90,31 +90,48 @@ export async function loadTargetFailuresForPromptOptimization(
 ): Promise<EvaluationLogRecord[]> {
   const promptConfig = await getDomainPromptConfig(domain);
   const effectiveMinScore = minScore ?? promptConfig.passThreshold;
+  const pickRecords = (records: EvaluationLogRecord[]): EvaluationLogRecord[] => {
+    const failures = records.filter(
+      (r) =>
+        !r.judgeResult.pass || r.judgeResult.score < effectiveMinScore
+    );
+    if (failures.length === 0) {
+      return [];
+    }
+    if (failures.length >= failedLimit) {
+      return failures.slice(0, failedLimit);
+    }
+    const seen = new Set(failures.map((r) => r.id));
+    const passRecords = records.filter((r) => !seen.has(r.id));
+    return [...failures, ...passRecords].slice(0, failedLimit);
+  };
 
   if (isWeaveConfigured()) {
     try {
       const fromWeave = await fetchJudgeLogsFromWeave({
         domain,
-        limit: failedLimit * 2,
+        limit: 100,
         throwOnError: true
       });
-      return fromWeave
-        .map(toEvaluationLogRecordFromWeave)
-        .filter(
-          (r) =>
-            !r.judgeResult.pass || r.judgeResult.score < effectiveMinScore
-        )
-        .slice(0, failedLimit);
+      return pickRecords(fromWeave.map(toEvaluationLogRecordFromWeave));
     } catch {
       // fall through to in-memory store only when Weave request itself fails
     }
   }
 
-  return listFailedEvaluations({
+  const failed = await listFailedEvaluations({
     domain,
     limit: failedLimit,
     minScore: effectiveMinScore
   });
+  if (failed.length >= failedLimit) {
+    return failed;
+  }
+  const all = await listEvaluationLogs({
+    domain,
+    limit: Math.max(failedLimit * 3, failedLimit)
+  });
+  return pickRecords(all);
 }
 
 export async function loadTargetExamplesForFewShot(

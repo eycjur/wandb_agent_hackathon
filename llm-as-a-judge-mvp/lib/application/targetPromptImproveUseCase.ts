@@ -35,24 +35,24 @@ function canFallbackFromGepa(error: unknown): boolean {
 }
 
 async function generateStandardTargetImprovement(
-  failedRecords: EvaluationLogRecord[],
+  records: EvaluationLogRecord[],
   promptConfig: Awaited<ReturnType<typeof getDomainPromptConfig>>,
   options: TargetPromptImproveOptions
 ): Promise<Pick<TargetPromptImprovementResult, "suggestion" | "analysisSummary">> {
-  const examplesText = failedRecords
+  const examplesText = records
     .map(
       (r, i) =>
         `【例${i + 1}】
 - 職務経歴入力: ${r.userInput.slice(0, 200)}${r.userInput.length > 200 ? "..." : ""}
 - 生成出力: ${r.generatedOutput.slice(0, 300)}${r.generatedOutput.length > 300 ? "..." : ""}
-- Judge 評価: スコア ${r.judgeResult.score}/${r.judgeResult.passThreshold}, 不合格
+- Judge 評価: スコア ${r.judgeResult.score}/${r.judgeResult.passThreshold}, ${r.judgeResult.pass ? "合格" : "不合格"}
 - 理由: ${r.judgeResult.reason}`
     )
     .join("\n\n");
 
   const prompt = `あなたは LLM の生成プロンプトを改善する専門家です。
 
-以下の「現在の生成プロンプト」と「Judge で不合格・低評価だったケース」を分析し、
+以下の「現在の生成プロンプト」と「Judge 評価ケース（合格データを含む）」を分析し、
 生成品質を向上させるための改善案を提案してください。
 
 ## 現在の生成プロンプト（target.instruction_template）
@@ -63,7 +63,7 @@ ${promptConfig.targetInstruction}
 
 ${promptConfig.judgeRubric.map((r) => `- ${r}`).join("\n")}
 
-## 不合格・低評価だったケース
+## 評価ケース（合格データを含む）
 
 ${examplesText}
 
@@ -92,14 +92,14 @@ ${examplesText}
 }
 
 /**
- * 不合格・低スコアの評価結果を分析し、生成プロンプトの改善案を LLM で生成する
+ * 評価結果を分析し、生成プロンプトの改善案を LLM で生成する
  */
 export async function generateTargetPromptImprovement(
-  failedRecords: EvaluationLogRecord[],
+  records: EvaluationLogRecord[],
   domain: DomainId,
   options: TargetPromptImproveOptions = {}
 ): Promise<TargetPromptImprovementResult> {
-  if (failedRecords.length === 0) {
+  if (records.length === 0) {
     return {
       suggestion:
         "不合格・低スコアの評価データがありません。生成・評価を実行してから再度お試しください。",
@@ -113,7 +113,7 @@ export async function generateTargetPromptImprovement(
   if (options.llmProvider === "ax" && options.improvementMethod === "gepa") {
     try {
       const gepaResult = await optimizeTargetPromptWithGEPA(
-        failedRecords,
+        records,
         domain,
         GEPA_TARGET_FAST_UI_BUDGET
       );
@@ -140,7 +140,7 @@ export async function generateTargetPromptImprovement(
 
   if (options.llmProvider === "ax" && options.improvementMethod === "fewshot") {
     const fewShotResult = await optimizeTargetPromptWithFewShot(
-      failedRecords,
+      records,
       domain
     );
     return {
@@ -184,7 +184,7 @@ export async function generateTargetPromptImprovement(
   }
 
   const standardResult = await generateStandardTargetImprovement(
-    failedRecords,
+    records,
     promptConfig,
     options
   );

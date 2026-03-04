@@ -45,7 +45,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
 }
 
 /**
- * 不合格・低スコアの評価データを用いて AxGEPA で生成プロンプトを最適化する
+ * 評価データを用いて AxGEPA で生成プロンプトを最適化する
  * メトリクス: 生成出力を Judge で評価し、スコアを最大化
  */
 export async function optimizeTargetPromptWithGEPA(
@@ -56,7 +56,7 @@ export async function optimizeTargetPromptWithGEPA(
   if (failedRecords.length < 1) {
     return {
       suggestion:
-        "AxGEPA 最適化には不合格・低スコアの評価データが最低1件必要です。生成・評価を実行してから再度お試しください。",
+        "AxGEPA 最適化には評価データが最低1件必要です。生成・評価を実行してから再度お試しください。",
       analysisSummary: "データ不足（1件未満）"
     };
   }
