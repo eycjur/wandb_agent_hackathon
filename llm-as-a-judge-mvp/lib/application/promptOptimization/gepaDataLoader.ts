@@ -71,8 +71,7 @@ export async function loadJudgeFeedbackForPromptOptimization(
     try {
       const fromWeave = await fetchHumanFeedbackWithJudgeMerged({
         domain,
-        limit: feedbackLimit,
-        throwOnError: true
+        limit: feedbackLimit
       });
       return fromWeave.map(toHumanFeedbackRecordFromWeave);
     } catch {
@@ -95,8 +94,7 @@ export async function loadTargetFailuresForPromptOptimization(
     try {
       const fromWeave = await fetchJudgeLogsFromWeave({
         domain,
-        limit: failedLimit * 2,
-        throwOnError: true
+        limit: failedLimit * 2
       });
       return fromWeave
         .map(toEvaluationLogRecordFromWeave)
@@ -125,8 +123,7 @@ export async function loadTargetExamplesForFewShot(
     try {
       const fromWeave = await fetchJudgeLogsFromWeave({
         domain,
-        limit: Math.max(limit * 3, limit),
-        throwOnError: true
+        limit: Math.max(limit * 3, limit)
       });
       return fromWeave
         .map(toEvaluationLogRecordFromWeave)

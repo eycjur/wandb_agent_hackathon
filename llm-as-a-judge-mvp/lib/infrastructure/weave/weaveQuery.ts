@@ -30,22 +30,15 @@ import { getWeaveProjectId } from "./weaveProjectId";
 export async function fetchHumanFeedbackFromWeave(options: {
   domain?: string;
   limit?: number;
-  throwOnError?: boolean;
 }): Promise<HumanFeedbackFromWeave[]> {
   const apiKey = process.env.WANDB_API_KEY;
   if (!apiKey) {
-    if (options.throwOnError) {
-      throw new Error("WANDB_API_KEY is not set.");
-    }
-    return [];
+    throw new Error("WANDB_API_KEY is not set.");
   }
 
   const projectId = await getWeaveProjectId();
   if (!projectId) {
-    if (options.throwOnError) {
-      throw new Error("Weave project_id is not available.");
-    }
-    return [];
+    throw new Error("Weave project_id is not available.");
   }
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
 
@@ -117,10 +110,7 @@ export async function fetchHumanFeedbackFromWeave(options: {
     return results;
   } catch (err) {
     console.warn("[weaveQuery] fetchHumanFeedbackFromWeave error:", err);
-    if (options.throwOnError) {
-      throw err instanceof Error ? err : new Error(String(err));
-    }
-    return [];
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 
@@ -172,7 +162,6 @@ function mergeJudgeIntoHumanFeedback(
 export async function fetchHumanFeedbackWithJudgeMerged(options: {
   domain?: string;
   limit?: number;
-  throwOnError?: boolean;
 }): Promise<HumanFeedbackFromWeave[]> {
   const [humanRecords, judgeRecords] = await Promise.all([
     fetchHumanFeedbackFromWeave(options),
@@ -191,22 +180,15 @@ export async function fetchHumanFeedbackWithJudgeMerged(options: {
 export async function fetchJudgeLogsFromWeave(options: {
   domain?: string;
   limit?: number;
-  throwOnError?: boolean;
 }): Promise<JudgeLogFromWeave[]> {
   const apiKey = process.env.WANDB_API_KEY;
   if (!apiKey) {
-    if (options.throwOnError) {
-      throw new Error("WANDB_API_KEY is not set.");
-    }
-    return [];
+    throw new Error("WANDB_API_KEY is not set.");
   }
 
   const projectId = await getWeaveProjectId();
   if (!projectId) {
-    if (options.throwOnError) {
-      throw new Error("Weave project_id is not available.");
-    }
-    return [];
+    throw new Error("Weave project_id is not available.");
   }
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
 
@@ -279,9 +261,6 @@ export async function fetchJudgeLogsFromWeave(options: {
     return results;
   } catch (err) {
     console.warn("[weaveQuery] fetchJudgeLogsFromWeave error:", err);
-    if (options.throwOnError) {
-      throw err instanceof Error ? err : new Error(String(err));
-    }
-    return [];
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
