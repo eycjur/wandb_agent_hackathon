@@ -130,6 +130,8 @@ export function createAxOptimizerEventLogger(scope: string) {
 export type AxOptimizationStartBudget = {
   maxIterations?: number;
   numTrials?: number;
+  /** BootstrapFewShot の maxRounds */
+  maxRounds?: number;
 };
 
 export function logAxOptimizationStart(
@@ -140,6 +142,7 @@ export function logAxOptimizationStart(
   const budgetParts: string[] = [];
   if (budget?.maxIterations != null) budgetParts.push(`maxIterations=${budget.maxIterations}`);
   if (budget?.numTrials != null) budgetParts.push(`numTrials=${budget.numTrials}`);
+  if (budget?.maxRounds != null) budgetParts.push(`maxRounds=${budget.maxRounds}`);
   const budgetStr =
     budgetParts.length > 0 ? ` [階層: ${budgetParts.join(" ")}]` : "";
   console.info(
