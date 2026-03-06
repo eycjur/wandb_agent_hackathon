@@ -21,6 +21,8 @@ export interface FewShotJudgeOptimizationResult {
   analysisSummary: string;
 }
 
+const JUDGE_FEWSHOT_MAX_DEMOS = 3;
+
 type JudgeExample = {
   userInput: string;
   generatedOutput: string;
@@ -29,6 +31,13 @@ type JudgeExample = {
   humanScore: number;
   passThreshold: number;
   humanComment?: string;
+};
+
+type JudgeDemoTrace = {
+  userInput: string;
+  generatedOutput: string;
+  score: number;
+  reason: string;
 };
 
 const AX_EXAMPLE_DISCLAIMER = `## Few-shot 例
@@ -41,6 +50,127 @@ const AX_EXAMPLE_SEPARATOR = `--- 例ここまで ---
 上記は学習用の例です。例中の固有情報は無視してください。
 
 実際のユーザー入力:`;
+
+function normalizeForKey(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function toTraceKey(userInput: string, generatedOutput: string): string {
+  return `${normalizeForKey(userInput)}\0${normalizeForKey(generatedOutput)}`;
+}
+
+function getRecordKey(record: Pick<HumanFeedbackRecord, "userInput" | "generatedOutput">): string | null {
+  const userInput = record.userInput?.trim();
+  const generatedOutput = record.generatedOutput?.trim();
+  if (!userInput || !generatedOutput) return null;
+  return toTraceKey(userInput, generatedOutput);
+}
+
+function getTraceKey(trace: Record<string, unknown>): string | null {
+  const userInput = typeof trace.userInput === "string" ? trace.userInput.trim() : "";
+  const generatedOutput =
+    typeof trace.generatedOutput === "string" ? trace.generatedOutput.trim() : "";
+  if (!userInput || !generatedOutput) return null;
+  return toTraceKey(userInput, generatedOutput);
+}
+
+function toHumanReason(comment?: string): string {
+  const trimmed = comment?.trim();
+  return trimmed && trimmed.length > 0
+    ? trimmed
+    : "人間評価スコアに整合する理由を返す";
+}
+
+function toSortedUniqueRecords(records: HumanFeedbackRecord[]): HumanFeedbackRecord[] {
+  const sorted = [...records].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  const byKey = new Map<string, HumanFeedbackRecord>();
+  for (const record of sorted) {
+    const key = getRecordKey(record);
+    if (!key || byKey.has(key)) continue;
+    byKey.set(key, record);
+  }
+  return Array.from(byKey.values());
+}
+
+function buildHumanAlignedDemos(
+  records: HumanFeedbackRecord[],
+  optimizedDemos: unknown,
+  programId: string,
+  maxDemos: number
+): {
+  demos: Array<{ traces: JudgeDemoTrace[]; programId: string }>;
+  selectedCount: number;
+  matchedOptimizedCount: number;
+} {
+  const uniqueRecords = toSortedUniqueRecords(records);
+  const recordByKey = new Map<string, HumanFeedbackRecord>();
+  for (const record of uniqueRecords) {
+    const key = getRecordKey(record);
+    if (!key) continue;
+    recordByKey.set(key, record);
+  }
+
+  const preferredKeys: string[] = [];
+  const preferredSet = new Set<string>();
+  if (Array.isArray(optimizedDemos)) {
+    for (const demo of optimizedDemos) {
+      const traces = (demo as { traces?: unknown }).traces;
+      if (!Array.isArray(traces)) continue;
+      for (const trace of traces) {
+        if (!trace || typeof trace !== "object") continue;
+        const key = getTraceKey(trace as Record<string, unknown>);
+        if (!key || preferredSet.has(key)) continue;
+        preferredSet.add(key);
+        preferredKeys.push(key);
+      }
+    }
+  }
+
+  const selected: HumanFeedbackRecord[] = [];
+  const selectedSet = new Set<string>();
+  let matchedOptimizedCount = 0;
+
+  for (const key of preferredKeys) {
+    if (selected.length >= maxDemos) break;
+    const record = recordByKey.get(key);
+    if (!record || selectedSet.has(key)) continue;
+    selected.push(record);
+    selectedSet.add(key);
+    matchedOptimizedCount += 1;
+  }
+
+  for (const record of uniqueRecords) {
+    if (selected.length >= maxDemos) break;
+    const key = getRecordKey(record);
+    if (!key || selectedSet.has(key)) continue;
+    selected.push(record);
+    selectedSet.add(key);
+  }
+
+  const traces: JudgeDemoTrace[] = selected.map((record) => ({
+    userInput: record.userInput,
+    generatedOutput: record.generatedOutput,
+    score: record.humanScore,
+    reason: toHumanReason(record.humanComment)
+  }));
+
+  const demos =
+    traces.length > 0
+      ? [
+          {
+            programId,
+            traces
+          }
+        ]
+      : [];
+  return {
+    demos,
+    selectedCount: traces.length,
+    matchedOptimizedCount
+  };
+}
 
 function buildPromptFromAxState(
   program: ReturnType<typeof ax>,
@@ -175,7 +305,7 @@ export async function optimizeJudgePromptWithFewShot(
   const optimizer = new AxBootstrapFewShot({
     studentAI,
     options: {
-      maxDemos: 3,
+      maxDemos: JUDGE_FEWSHOT_MAX_DEMOS,
       maxRounds: 2,
       earlyStoppingPatience: 2,
       verboseMode: true
@@ -190,29 +320,35 @@ export async function optimizeJudgePromptWithFewShot(
   const optimized = await optimizer.compile(judgeProgram, examples, metricFn, {
     maxIterations: 2,
     earlyStoppingPatience: 2,
-    maxDemos: 3
+    maxDemos: JUDGE_FEWSHOT_MAX_DEMOS
   });
   logAxOptimizationDone(`judge-fewshot:${domain}`, optimized.bestScore ?? 0);
 
   const optimizedDemos = optimized.demos ?? optimized.optimizedProgram?.demos ?? [];
   console.info(`[ax-opt][judge-fewshot:${domain}] demos=${optimizedDemos.length}`);
 
-  if (optimizedDemos.length === 0) {
+  const humanAligned = buildHumanAlignedDemos(
+    withJudgeResult,
+    optimizedDemos,
+    judgeProgram.getId(),
+    JUDGE_FEWSHOT_MAX_DEMOS
+  );
+
+  if (humanAligned.demos.length === 0) {
     throw new AppError(
       502,
       "PROVIDER_RESPONSE_INVALID",
-      "Few-shot 最適化で有効なデモを生成できませんでした。",
-      "AxBootstrapFewShot produced zero demos."
+      "Few-shot 用の人間評価デモを生成できませんでした。",
+      "Human-aligned few-shot demos were empty."
     );
   }
 
   if (optimized.optimizedProgram) {
     judgeProgram.applyOptimization(optimized.optimizedProgram);
-  } else {
-    judgeProgram.setDemos(optimizedDemos);
   }
+  judgeProgram.setDemos(humanAligned.demos);
 
-  const suggestion = buildPromptFromAxState(judgeProgram, optimizedDemos);
+  const suggestion = buildPromptFromAxState(judgeProgram, humanAligned.demos);
   if (!suggestion) {
     throw new AppError(
       502,
@@ -224,6 +360,6 @@ export async function optimizeJudgePromptWithFewShot(
 
   return {
     suggestion,
-    analysisSummary: `AxBootstrapFewShot で判定タスクを直接最適化しました。Axの適用ロジック（applyOptimization/setDemos）に従ってプロンプトを取得しています。ベストスコア: ${(optimized.bestScore ?? 0).toFixed(2)}`
+    analysisSummary: `AxBootstrapFewShot で判定タスクを最適化し、最終few-shotには人間評価スコアを反映しました。採用デモ: ${humanAligned.selectedCount}件（最適化候補一致: ${humanAligned.matchedOptimizedCount}件）。ベストスコア: ${(optimized.bestScore ?? 0).toFixed(2)}`
   };
 }
