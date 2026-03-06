@@ -68,8 +68,7 @@ describe("gepaDataLoader", () => {
     expect(mockListHumanFeedback).not.toHaveBeenCalled();
     expect(mockFetchHumanFeedbackWithJudgeMerged).toHaveBeenCalledWith({
       domain: "resume_summary",
-      limit: 10,
-      throwOnError: true
+      limit: 10
     });
   });
 
@@ -101,8 +100,7 @@ describe("gepaDataLoader", () => {
     expect(records).toHaveLength(1);
     expect(mockFetchHumanFeedbackWithJudgeMerged).toHaveBeenCalledWith({
       domain: "resume_summary",
-      limit: 10,
-      throwOnError: true
+      limit: 10
     });
     expect(mockListHumanFeedback).toHaveBeenCalledWith({
       domain: "resume_summary",
@@ -143,8 +141,7 @@ describe("gepaDataLoader", () => {
     expect(mockListFailedEvaluations).not.toHaveBeenCalled();
     expect(mockFetchJudgeLogsFromWeave).toHaveBeenCalledWith({
       domain: "resume_summary",
-      limit: 20,
-      throwOnError: true
+      limit: 20
     });
   });
 });
