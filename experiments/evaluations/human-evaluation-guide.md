@@ -25,12 +25,14 @@
 
 ## 4. 評価の前に確認すること
 
-各ケースには以下の情報がある。
+各ケースは、以下の 2 つを見ながら評価する。
 
-- `case_id`
-- `title`
-- `assumed_primary_role`
-- `input`
+- [README.md](/Users/suguru.masui/wandb_agent_hackathon/experiments/cases/README.md)
+  - `case_id`
+  - `title`
+  - `assumed_primary_role`
+- `experiments/cases/inputs/train/*.txt` または `experiments/cases/inputs/eval/*.txt`
+  - アプリへ貼り付ける入力本文
 
 ### 4.1 どの職種向け自己PRとして見るか
 
@@ -53,26 +55,37 @@
 
 ## 5. 評価手順
 
-1. ケース ID と想定職種を確認する
-2. 元の入力文をざっと読む
-3. 生成された自己PRを読む
-4. `humanScore` を付ける
-5. `ready_to_use` を判定する
-6. `issue_tag_1` を付ける
-7. 必要なら `issue_tag_2` と `good_point_tag` を付ける
-8. コメントを書く
-9. その後で Judge 結果を見て `judge_agreement` を付ける
+1. [README.md](/Users/suguru.masui/wandb_agent_hackathon/experiments/cases/README.md) で `case_id` と `assumed_primary_role` を確認する
+2. 対応する `.txt` を開く
+3. `.txt` の本文をアプリへ貼り付けて生成する
+4. 元の入力文をざっと読む
+5. 生成された自己PRを読む
+6. `humanScore` を付ける
+7. `ready_to_use` を判定する
+8. `issue_tag_1` を付ける
+9. 必要なら `issue_tag_2` と `good_point_tag` を付ける
+10. コメントを書く
+11. その後で Judge 結果を見て `judge_agreement` を付ける
+
+### 5.1 どのファイルを開くか
+
+- 学習用ケース:
+  - `experiments/cases/inputs/train/SP-01.txt` のようなファイル
+- 検証用ケース:
+  - `experiments/cases/inputs/eval/SP-11.txt` のようなファイル
+
+ケースの本文そのものは `.txt` が正本であり、評価時はこの本文をそのまま使う。
 
 ## 6. スコア基準
 
-| スコア | 判断基準 |
-|---|---|
-| 5 | そのまま応募に使える。強みが明確で、具体性・説得力・簡潔さが揃っている |
-| 4 | 実務利用可能。軽微な改善余地はあるが、応募書類として十分使える |
-| 3 | 大枠は使えるが弱い。具体性、職種適合、印象のいずれかが不足している |
-| 2 | 使いにくい。曖昧表現や根拠不足が目立ち、訴求力が弱い |
-| 1 | 強みや専門性がほぼ伝わらない。自己PRとして成立が弱い |
-| 0 | 自己PRとして成立していない。事実誤認、意味不明、過度な冗長などがある |
+| スコア | 判断基準                                                               |
+| ------ | ---------------------------------------------------------------------- |
+| 5      | そのまま応募に使える。強みが明確で、具体性・説得力・簡潔さが揃っている |
+| 4      | 実務利用可能。軽微な改善余地はあるが、応募書類として十分使える         |
+| 3      | 大枠は使えるが弱い。具体性、職種適合、印象のいずれかが不足している     |
+| 2      | 使いにくい。曖昧表現や根拠不足が目立ち、訴求力が弱い                   |
+| 1      | 強みや専門性がほぼ伝わらない。自己PRとして成立が弱い                   |
+| 0      | 自己PRとして成立していない。事実誤認、意味不明、過度な冗長などがある   |
 
 ## 7. `ready_to_use` の基準
 
