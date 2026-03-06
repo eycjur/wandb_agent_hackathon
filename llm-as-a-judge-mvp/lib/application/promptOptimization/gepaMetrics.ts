@@ -121,6 +121,7 @@ export function calculateJudgeGepaMetricBreakdown(
   scoreAgreement: number;
   passAgreement: number;
   reasonQuality: number;
+  reasonLength: number;
 } {
   const predictedScore = toScore(prediction.score);
   const humanScore = toScore(example.humanScore);
@@ -128,15 +129,14 @@ export function calculateJudgeGepaMetricBreakdown(
   const scoreAgreement = clamp01(1 - Math.abs(predictedScore - humanScore) / SCORE_MAX);
   const passAgreement =
     (predictedScore >= passThreshold) === (humanScore >= passThreshold) ? 1 : 0;
-  const reasonQuality = computeReasonQualityScore(
-    typeof prediction.reason === "string" ? prediction.reason : "",
-    rubricKeywords,
-    example.humanComment
-  );
+  const reason = typeof prediction.reason === "string" ? prediction.reason : "";
+  const reasonQuality = computeReasonQualityScore(reason, rubricKeywords, example.humanComment);
+  const reasonLength = computeReasonLengthScore(reason);
   return {
     scoreAgreement,
     passAgreement,
-    reasonQuality
+    reasonQuality,
+    reasonLength
   };
 }
 
@@ -211,6 +211,8 @@ export function calculateTargetGepaMetricBreakdown(
   improvementDelta: number;
   passReached: number;
   formatScore: number;
+  /** スカラー化済み（absoluteQuality + improvementDelta + passReached の加重平均） */
+  score: number;
 } {
   const score = toScore(predictedScore);
   const passThreshold = Math.min(Math.max(Number(example.passThreshold), 0), SCORE_MAX);
@@ -223,10 +225,17 @@ export function calculateTargetGepaMetricBreakdown(
   const passReached = score >= passThreshold ? 1 : 0;
   const formatScore = scoreTargetOutputFormat(generatedOutput, example.domain);
 
+  const scalarScore = clamp01(
+    absoluteQuality * TARGET_METRIC_WEIGHTS.absoluteQuality +
+      improvementDelta * TARGET_METRIC_WEIGHTS.improvementDelta +
+      passReached * TARGET_METRIC_WEIGHTS.passReached
+  );
+
   return {
     absoluteQuality,
     improvementDelta,
     passReached,
-    formatScore
+    formatScore,
+    score: scalarScore
   };
 }

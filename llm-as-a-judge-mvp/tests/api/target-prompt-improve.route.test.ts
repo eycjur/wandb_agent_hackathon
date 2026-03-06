@@ -38,7 +38,6 @@ describe("POST /api/target-prompt/improve", () => {
     mockLoadTargetExamplesForFewShot.mockResolvedValue([]);
     mockGenerateTargetPromptImprovement.mockResolvedValue({
       suggestion: "改善版の target instruction テキスト",
-      analysisSummary: "実績の数値化が不足している",
       resultSource: "standard"
     });
   });
@@ -59,7 +58,7 @@ describe("POST /api/target-prompt/improve", () => {
     expect(body.error.code).toBe("INVALID_JSON");
   });
 
-  it("正常系は200でsuggestionとanalysisSummaryを返す", async () => {
+  it("正常系は200でsuggestionを返す", async () => {
     const { POST } = await import("@/app/api/target-prompt/improve/route");
 
     const request = new Request("http://localhost/api/target-prompt/improve", {
@@ -73,7 +72,6 @@ describe("POST /api/target-prompt/improve", () => {
 
     expect(response.status).toBe(200);
     expect(body.suggestion).toBe("改善版の target instruction テキスト");
-    expect(body.analysisSummary).toBe("実績の数値化が不足している");
     expect(body.resultSource).toBe("standard");
     expect(mockLoadTargetFailuresForPromptOptimization).toHaveBeenCalledWith(
       "resume_summary",
@@ -103,5 +101,62 @@ describe("POST /api/target-prompt/improve", () => {
       5,
       3
     );
+  });
+
+  it("selectedRecordIds を指定した場合は選択レコードのみ改善処理へ渡す", async () => {
+    mockLoadTargetFailuresForPromptOptimization.mockResolvedValue([
+      {
+        id: "eval_1",
+        domain: "resume_summary",
+        userInput: "input1",
+        generatedOutput: "output1",
+        judgeResult: {
+          score: 2,
+          reason: "r1",
+          pass: false,
+          passThreshold: 4,
+          rubricVersion: 1
+        },
+        createdAt: "2024-01-01T00:00:00.000Z"
+      },
+      {
+        id: "eval_2",
+        domain: "resume_summary",
+        userInput: "input2",
+        generatedOutput: "output2",
+        judgeResult: {
+          score: 4,
+          reason: "r2",
+          pass: true,
+          passThreshold: 4,
+          rubricVersion: 1
+        },
+        createdAt: "2024-01-01T00:00:01.000Z"
+      }
+    ]);
+
+    const { POST } = await import("@/app/api/target-prompt/improve/route");
+    const request = new Request("http://localhost/api/target-prompt/improve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        domain: "resume_summary",
+        improvementMethod: "meta",
+        selectedRecordIds: ["eval_2"]
+      })
+    });
+
+    await POST(request as never);
+
+    expect(mockGenerateTargetPromptImprovement).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "eval_2" })
+      ]),
+      "resume_summary",
+      expect.any(Object)
+    );
+    const firstArg = mockGenerateTargetPromptImprovement.mock.calls.at(-1)?.[0] as Array<{ id: string }>;
+    expect(firstArg).toHaveLength(1);
+    expect(firstArg[0]?.id).toBe("eval_2");
   });
 });

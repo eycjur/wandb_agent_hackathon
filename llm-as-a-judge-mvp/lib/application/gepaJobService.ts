@@ -168,18 +168,14 @@ function toPersistedJobRecord(raw: unknown): PersistedJobParseResult {
     typeof raw.finishedAt === "string" ? raw.finishedAt : undefined;
   const parsedResultSource: JudgePromptImprovementResult["resultSource"] =
     isObject(raw.result) &&
-    (raw.result.resultSource === "gepa" ||
-      raw.result.resultSource === "fallback" ||
-      raw.result.resultSource === "standard")
+    (raw.result.resultSource === "gepa" || raw.result.resultSource === "standard")
       ? raw.result.resultSource
       : "gepa";
   const result =
     isObject(raw.result) &&
-    typeof raw.result.suggestion === "string" &&
-    typeof raw.result.analysisSummary === "string"
+    typeof raw.result.suggestion === "string"
       ? {
           suggestion: raw.result.suggestion,
-          analysisSummary: raw.result.analysisSummary,
           resultSource: parsedResultSource,
           currentPrompt:
             typeof raw.result.currentPrompt === "string"
@@ -400,6 +396,11 @@ export class GepaJobService {
       job.status = "failed";
       job.error = toJobError(error);
       job.result = undefined;
+      if (error instanceof AppError && error.status === 502) {
+        console.error(
+          `[GepaJobService] 502 PROVIDER_ERROR jobId=${job.jobId} kind=${job.kind} domain=${job.domain}: code=${error.code} message=${error.exposeMessage} detail=${error.message}`
+        );
+      }
     } finally {
       job.finishedAt = this.now().toISOString();
       this.gc();

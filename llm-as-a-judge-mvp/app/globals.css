@@ -16,8 +16,8 @@
 
   /* Text */
   --text-primary: #e4eaf1;
-  --text-secondary: #7e909e;
-  --text-muted: #4d6070;
+  --text-secondary: #8a9caa;
+  --text-muted: #6a7d8e;
 
   /* Semantic */
   --ok: #22c968;
@@ -347,6 +347,12 @@ label {
   color: var(--text-secondary);
   letter-spacing: 0.02em;
   text-transform: uppercase;
+}
+
+/* GEPA / Few-shot パラメータなど、コード風ラベルは大文字変換しない */
+.gepaParams label,
+.fewShotParams label {
+  text-transform: none;
 }
 
 textarea {
@@ -900,6 +906,32 @@ h2:focus-visible,
   font-size: 0.88rem;
 }
 
+.optimizationLogDetails {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+}
+
+.optimizationLogDetails summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.optimizationLogContent {
+  margin: 0;
+  padding: 12px;
+  max-height: 280px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+}
+
 /* ── Weave Prompt Panel ──────────────────────── */
 .weavePromptPanel {
   margin-top: 20px;
@@ -1119,6 +1151,57 @@ pre {
   100% {
     background-position: -100% 0;
   }
+}
+
+/* ── Help Tooltip ───────────────────────────────── */
+.helpTooltipWrapper {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.helpTooltipIcon {
+  cursor: help;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  margin-left: 4px;
+  line-height: 1;
+}
+
+.helpTooltipContent {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: normal;
+  min-width: 320px;
+  max-width: 420px;
+  width: max-content;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.15s ease, visibility 0.15s;
+  pointer-events: none;
+}
+
+.helpTooltipWrapper:hover .helpTooltipContent {
+  visibility: visible;
+  opacity: 1;
 }
 
 /* ── Responsive ───────────────────────────────── */

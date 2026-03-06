@@ -48,7 +48,7 @@ export async function generateTextForPromptImprovement(
     return generateText(prompt, { timeoutMs: PROMPT_IMPROVE_TIMEOUT_MS });
   }
 
-  // ax の場合: few-shot / GEPA フォールバック経路で ax() シグネチャを使用
+  // ax の場合: few-shot / GEPA 経路で ax() シグネチャを使用
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_APIKEY ?? "";
   if (!apiKey) {
     throw new AppError(

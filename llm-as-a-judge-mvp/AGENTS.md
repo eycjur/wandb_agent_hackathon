@@ -48,6 +48,7 @@
 - 機密情報（`GEMINI_API_KEY`）をクライアントへ露出しない
 - Gemini APIの直接呼び出しは `GeminiProvider` に集約する
 - Judge/Target/GEPA の学習データ取得は `lib/application/promptOptimization/gepaDataLoader.ts` を再利用し、同一挙動を維持する
+- GEPA/Few-shot など最適化処理でフォールバック分岐を実装しない（失敗時は根本原因を修正する）
 
 ## 4. プロンプト/サンプル運用ルール
 - 現行ドメインは `resume_summary` / `resume_detail` / `self_pr`
@@ -87,7 +88,10 @@
 - Trace API の `op_name` はフル URI 形式のため、`op_names` フィルタではなく `query` の `$contains` を使用
 - domain フィルタは Trace API の `query` で `$getField("inputs.domain")` を指定
 
-## 9. GEPA Queue の注意
+## 9. GEPA / Few-shot / GEPA Queue の注意
+- GEPA の iteration / trial の仕組み・パラメータ・並列化は `lib/promptOptimizer/GEPA.md` を参照
+- GEPA 実装は `lib/promptOptimizer/GEPAOptimizer.ts`（`@ax-llm/ax` の AxGEPA ではない）
+- Few-shot 実装は `lib/promptOptimizer/BootstrapFewShotOptimizer.ts`（`@ax-llm/ax` の AxBootstrapFewShot ではない）
 - GEPA キューは `lib/application/gepaJobService.ts` が担当し、状態は既定で `/tmp/llm-as-a-judge-mvp/gepa-jobs-state.json` に保存する
 - 復旧時は `running` を `queued` に戻して再実行する
 - `GEPA_JOB_STATE_FILE` を設定すると保存先を変更できる

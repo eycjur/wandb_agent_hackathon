@@ -69,6 +69,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof AppError) {
+      if (error.status === 502) {
+        console.error(
+          `[/api/generate] 502 PROVIDER_ERROR: code=${error.code} message=${error.exposeMessage} detail=${error.message}`
+        );
+      }
       return jsonError(error.status, error.code, error.exposeMessage);
     }
 
