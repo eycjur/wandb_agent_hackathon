@@ -349,9 +349,10 @@ label {
   text-transform: uppercase;
 }
 
-/* GEPA / Few-shot パラメータなど、コード風ラベルは大文字変換しない */
+/* GEPA / Few-shot / ログレベル パラメータなど、コード風ラベルは大文字変換しない */
 .gepaParams label,
-.fewShotParams label {
+.fewShotParams label,
+.logLevelParams label {
   text-transform: none;
 }
 

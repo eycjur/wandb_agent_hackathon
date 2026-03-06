@@ -237,7 +237,10 @@ export class GEPAOptimizer {
               score,
               scores
             };
-          } catch {
+          } catch (err) {
+            logger.info(
+              `Step A: 例の評価失敗 — ${err instanceof Error ? err.message : String(err)}`
+            );
             return {
               example,
               prediction: Object.fromEntries(
@@ -295,16 +298,11 @@ export class GEPAOptimizer {
         `AIシステムのプロンプトを分析しています。\n\n` +
         `現在のプロンプト:\n"""\n${bestPrompt}\n"""\n\n` +
         `評価結果（全例）:\n${allExamplesStr}\n\n` +
-        `上記の評価結果を踏まえ、スコアが低い例はなぜ失敗しているか、スコアが高い例は何が良かったか、` +
-        `プロンプトのどの部分をどう修正すれば改善されるかを3〜5文で具体的に診断してください。`;
+        `上記の評価結果を踏まえ、詳細に診断してください。` +
+        `スコアが低い例はなぜ失敗しているか、スコアが高い例は何が良かったか、` +
+        `プロンプトのどの部分をどう修正すれば改善されるかを、具体例を挙げながら丁寧に分析してください。`;
 
-      let reflection: string;
-      try {
-        reflection = await runTeacher(client, teacherModel, reflectionPrompt, 0.3);
-      } catch {
-        reflection =
-          "反省の生成に失敗。プロンプトをより明確で具体的にすることを試みる。";
-      }
+      const reflection = await runTeacher(client, teacherModel, reflectionPrompt, 0.3);
 
       // ── Step C: インスタンスフロント頻度で親選択（多目的時は Pareto 非支配） ──
       const instanceFronts = isMultiObj
@@ -684,7 +682,10 @@ export class GEPAOptimizer {
         perInstance,
         iteration: -1
       };
-    } catch {
+    } catch (err) {
+      logger.info(
+        `Merge: runTeacher 失敗 — ${err instanceof Error ? err.message : String(err)}`
+      );
       return null;
     }
   }

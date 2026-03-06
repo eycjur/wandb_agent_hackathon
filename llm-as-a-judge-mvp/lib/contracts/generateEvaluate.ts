@@ -16,6 +16,9 @@ export type LLMProviderId = z.infer<typeof LLMProviderSchema>;
 export const ImprovementMethodSchema = z.enum(["meta", "fewshot", "gepa"]);
 export type ImprovementMethodId = z.infer<typeof ImprovementMethodSchema>;
 
+export const LogLevelSchema = z.enum(["off", "error", "info", "debug"]);
+export type LogLevelId = z.infer<typeof LogLevelSchema>;
+
 export const ErrorCodeSchema = z.enum([
   "INVALID_JSON",
   "VALIDATION_ERROR",
@@ -202,7 +205,8 @@ export const JudgePromptImproveRequestSchema = z.object({
   llmProvider: LLMProviderSchema.optional().default("ax"),
   improvementMethod: ImprovementMethodSchema,
   gepaBudget: GepaBudgetOverridesSchema,
-  fewShotBudget: FewShotBudgetOverridesSchema
+  fewShotBudget: FewShotBudgetOverridesSchema,
+  logLevel: LogLevelSchema.optional()
 });
 
 export const JudgePromptImproveResponseSchema = z.object({
@@ -222,7 +226,8 @@ export const TargetPromptImproveRequestSchema = z.object({
   llmProvider: LLMProviderSchema.optional().default("ax"),
   improvementMethod: ImprovementMethodSchema,
   gepaBudget: GepaBudgetOverridesSchema,
-  fewShotBudget: FewShotBudgetOverridesSchema
+  fewShotBudget: FewShotBudgetOverridesSchema,
+  logLevel: LogLevelSchema.optional()
 });
 
 export const TargetPromptImproveResponseSchema = z.object({

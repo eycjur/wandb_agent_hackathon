@@ -112,7 +112,10 @@ export class BootstrapFewShotOptimizer {
             return { inputs: example.inputs, outputs: teacherPred, score } satisfies BootstrapDemo;
           }
           return null;
-        } catch {
+        } catch (err) {
+          logger.info(
+            `Bootstrap: 例の評価失敗 — ${err instanceof Error ? err.message : String(err)}`
+          );
           return null;
         }
       })

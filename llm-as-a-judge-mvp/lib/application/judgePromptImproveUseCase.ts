@@ -9,8 +9,13 @@ import type {
   ImprovementMethodId,
   LLMProviderId,
   GepaBudgetOverrides,
-  FewShotBudgetOverrides
+  FewShotBudgetOverrides,
+  LogLevelId
 } from "@/lib/contracts/generateEvaluate";
+import {
+  withLogLevelContext,
+  getDebugLogCollector
+} from "@/lib/promptOptimizer/logLevel";
 import { getWeaveProjectId } from "@/lib/infrastructure/weave/weaveProjectId";
 import {
   GEPA_JUDGE_FAST_UI_BUDGET,
@@ -31,6 +36,7 @@ export type JudgePromptImproveOptions = {
   improvementMethod?: ImprovementMethodId;
   gepaBudget?: GepaBudgetOverrides;
   fewShotBudget?: FewShotBudgetOverrides;
+  logLevel?: LogLevelId;
 };
 
 function parseImprovementResponse(rawResponse: string): Pick<
@@ -119,15 +125,31 @@ export async function generateJudgePromptImprovement(
     };
   }
 
+  const runWithLogLevel = async <T extends { optimizationLog?: string[] }>(
+    fn: () => Promise<T>
+  ): Promise<T> => {
+    if (!options.logLevel) return fn();
+    return withLogLevelContext(options.logLevel, async () => {
+      const result = await fn();
+      const debugLogs = getDebugLogCollector();
+      if (debugLogs?.length && options.logLevel === "debug") {
+        const base = result?.optimizationLog ?? [];
+        return {
+          ...result,
+          optimizationLog: [...base, "", "[debug] LLM calls:", ...debugLogs]
+        } as T;
+      }
+      return result;
+    });
+  };
+
   if (options.llmProvider === "ax" && options.improvementMethod === "gepa") {
     const budget = mergeGepaBudgetWithOverrides(
       GEPA_JUDGE_FAST_UI_BUDGET,
       options.gepaBudget
     );
-    const gepaResult = await optimizeJudgePromptWithGEPA(
-      feedbackRecords,
-      domain,
-      budget
+    const gepaResult = await runWithLogLevel(() =>
+      optimizeJudgePromptWithGEPA(feedbackRecords, domain, budget)
     );
     return {
       ...gepaResult,
@@ -137,10 +159,12 @@ export async function generateJudgePromptImprovement(
   }
 
   if (options.llmProvider === "ax" && options.improvementMethod === "fewshot") {
-    const fewShotResult = await optimizeJudgePromptWithFewShot(
-      feedbackRecords,
-      domain,
-      options.fewShotBudget
+    const fewShotResult = await runWithLogLevel(() =>
+      optimizeJudgePromptWithFewShot(
+        feedbackRecords,
+        domain,
+        options.fewShotBudget
+      )
     );
     return {
       ...fewShotResult,

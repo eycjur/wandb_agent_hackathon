@@ -28,6 +28,10 @@ export const GEPA_PARAM_TOOLTIPS = {
     "タイムアウト(秒)。0=無制限。指定秒数で打ち切り、それまでのベストを返す。"
 } as const;
 
+/** ログレベルのツールチップ文言 */
+export const LOG_LEVEL_TOOLTIP =
+  "最適化実行時のログ出力レベル。debug で LLM 呼び出しの開始・終了・所要時間を出力。未指定時は環境変数 GEPA_LOG_LEVEL に従う。";
+
 /** Few-shot パラメータのツールチップ文言 */
 export const FEWSHOT_PARAM_TOOLTIPS = {
   maxDemos:

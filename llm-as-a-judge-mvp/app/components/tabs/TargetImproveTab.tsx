@@ -9,8 +9,10 @@ import { PromptDiffView } from "@/app/components/PromptDiffView";
 import {
   HelpTooltip,
   GEPA_PARAM_TOOLTIPS,
-  FEWSHOT_PARAM_TOOLTIPS
+  FEWSHOT_PARAM_TOOLTIPS,
+  LOG_LEVEL_TOOLTIP
 } from "@/app/components/HelpTooltip";
+import type { LogLevelId } from "@/lib/contracts/generateEvaluate";
 import type { TargetPromptImproveResponse } from "@/lib/contracts/generateEvaluate";
 
 function isTargetImproveResponse(data: unknown): data is TargetPromptImproveResponse {
@@ -66,6 +68,7 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
   const [fewShotMaxRounds, setFewShotMaxRounds] = useState(2);
   const [fewShotDemoThreshold, setFewShotDemoThreshold] = useState(0.5);
   const [fewShotTimeoutSeconds, setFewShotTimeoutSeconds] = useState(0);
+  const [logLevel, setLogLevel] = useState<LogLevelId | "">("");
   const improvementMethodDescription =
     improvementMethod === "meta"
       ? "LLMで改善プロンプトを作成します。"
@@ -156,7 +159,8 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
                 compileTimeoutMs: fewShotTimeoutSeconds * 1000
               })
             }
-          })
+          }),
+          ...(logLevel !== "" && { logLevel })
         })
       });
       const data: unknown = await res.json().catch(() => ({}));
@@ -471,6 +475,28 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
           <p className="hintText" style={{ marginTop: 8 }}>
             {improvementMethodDescription}
           </p>
+        </div>
+        <div className="logLevelParams" style={{ marginTop: 16 }}>
+          <h4 style={{ marginBottom: 8, fontSize: "0.9rem" }}>ログレベル</h4>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ minWidth: 140 }}>
+              レベル:
+              <HelpTooltip text={LOG_LEVEL_TOOLTIP} />
+            </span>
+            <select
+              value={logLevel}
+              onChange={(e) =>
+                setLogLevel((e.target.value || "") as LogLevelId | "")
+              }
+              style={{ minWidth: 120 }}
+            >
+              <option value="">未指定</option>
+              <option value="off">off</option>
+              <option value="error">error</option>
+              <option value="info">info</option>
+              <option value="debug">debug</option>
+            </select>
+          </label>
         </div>
         {improvementMethod === "fewshot" && (
           <div className="fewShotParams" style={{ marginTop: 16 }}>

@@ -9,8 +9,13 @@ import type {
   ImprovementMethodId,
   LLMProviderId,
   GepaBudgetOverrides,
-  FewShotBudgetOverrides
+  FewShotBudgetOverrides,
+  LogLevelId
 } from "@/lib/contracts/generateEvaluate";
+import {
+  withLogLevelContext,
+  getDebugLogCollector
+} from "@/lib/promptOptimizer/logLevel";
 import { getWeaveProjectId } from "@/lib/infrastructure/weave/weaveProjectId";
 import {
   GEPA_TARGET_FAST_UI_BUDGET,
@@ -31,6 +36,7 @@ export type TargetPromptImproveOptions = {
   improvementMethod?: ImprovementMethodId;
   gepaBudget?: GepaBudgetOverrides;
   fewShotBudget?: FewShotBudgetOverrides;
+  logLevel?: LogLevelId;
 };
 
 async function generateStandardTargetImprovement(
@@ -105,15 +111,31 @@ export async function generateTargetPromptImprovement(
   }
   const promptConfig = await getDomainPromptConfig(domain);
 
+  const runWithLogLevel = async <T extends { optimizationLog?: string[] }>(
+    fn: () => Promise<T>
+  ): Promise<T> => {
+    if (!options.logLevel) return fn();
+    return withLogLevelContext(options.logLevel, async () => {
+      const result = await fn();
+      const debugLogs = getDebugLogCollector();
+      if (debugLogs?.length && options.logLevel === "debug") {
+        const base = result?.optimizationLog ?? [];
+        return {
+          ...result,
+          optimizationLog: [...base, "", "[debug] LLM calls:", ...debugLogs]
+        } as T;
+      }
+      return result;
+    });
+  };
+
   if (options.llmProvider === "ax" && options.improvementMethod === "gepa") {
     const budget = mergeGepaBudgetWithOverrides(
       GEPA_TARGET_FAST_UI_BUDGET,
       options.gepaBudget
     );
-    const gepaResult = await optimizeTargetPromptWithGEPA(
-      failedRecords,
-      domain,
-      budget
+    const gepaResult = await runWithLogLevel(() =>
+      optimizeTargetPromptWithGEPA(failedRecords, domain, budget)
     );
     return {
       ...gepaResult,
@@ -123,10 +145,12 @@ export async function generateTargetPromptImprovement(
   }
 
   if (options.llmProvider === "ax" && options.improvementMethod === "fewshot") {
-    const fewShotResult = await optimizeTargetPromptWithFewShot(
-      failedRecords,
-      domain,
-      options.fewShotBudget
+    const fewShotResult = await runWithLogLevel(() =>
+      optimizeTargetPromptWithFewShot(
+        failedRecords,
+        domain,
+        options.fewShotBudget
+      )
     );
     return {
       ...fewShotResult,

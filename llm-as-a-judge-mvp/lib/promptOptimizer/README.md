@@ -24,7 +24,8 @@ lib/promptOptimizer/
 ├── BootstrapFewShotOptimizer.ts # DSPy 流 Bootstrap Few-Shot
 ├── GEPAOptimizer.ts       # 反省的プロンプト進化
 ├── runner.ts              # runProgram, evaluatePrompt, runTeacher（Gemini 呼び出し）
-├── concurrencyLimiter.ts   # LLM 同時呼び出し数制限・デバッグログ
+├── concurrencyLimiter.ts   # LLM 同時呼び出し数制限・ログ
+├── logLevel.ts             # ログレベル管理（GEPA_LOG_LEVEL）
 ├── paretoUtils.ts         # Pareto frontier・インスタンスフロント（GEPA 用）
 ├── logger.ts              # OptimizationLogger
 └── timeout.ts             # タイムアウト・打ち切り
@@ -121,7 +122,51 @@ iteration（最外ループ: 1 ～ maxIterations）
 
 **1 iteration の流れ**: 全データ評価 → 反省（1回）→ 親選択 → 候補生成（numTrials 並列）→ 候補評価（全候補・全 example 並列）→ Merge → 早期終了判定
 
-**詳細**: [GEPA.md](./GEPA.md) の「ループ階層」「1 iteration の流れ」を参照
+---
+
+### GEPA の FB（反省）とその生成方法
+
+GEPA では **FB（Feedback）** を **反省（Reflection）** または論文用語で **Actionable Side Information (ASI)** と呼ぶ。これは「評価結果を踏まえた改善のための診断テキスト」であり、突然変異（Mutation）で候補プロンプトを生成する際の文脈として使われる。
+
+#### FB とは
+
+- **役割**: 現在のプロンプトの評価結果を Teacher が分析し、「なぜ失敗したか」「どう修正すべきか」を 3〜5 文でまとめたテキスト
+- **使用先**: Step C（突然変異）の mutationPrompt に「評価の診断 (Actionable Side Information)」として埋め込み、候補プロンプト生成の指示に含める
+- **Merge では未使用**: Merge は Pareto 上位 2 候補のプロンプトのみを合成し、FB は渡さない
+
+#### 生成方法
+
+1. **入力の準備**
+   - Step A で `bestPrompt` を全 `task.examples` で評価した結果を取得
+   - 評価結果を最大 10 件に制限し、各件について以下を整形:
+     - 入力（`inputs` の各フィールド、200 文字まで）
+     - 予測（`outputFields` の値）
+     - 期待（`expectedOutputs`）
+     - スコア（スカラーまたは多目的の各値）
+
+2. **reflectionPrompt の構成**
+   ```
+   AIシステムのプロンプトを分析しています。
+
+   現在のプロンプト:
+   """（bestPrompt）"""
+
+   評価結果（全例）:
+   （入力・予測・期待・スコアを整形したテキスト）
+
+   上記の評価結果を踏まえ、スコアが低い例はなぜ失敗しているか、
+   スコアが高い例は何が良かったか、プロンプトのどの部分をどう修正すれば
+   改善されるかを、具体例を挙げながら丁寧に分析してください。
+   ```
+
+3. **Teacher 呼び出し**
+   - `runTeacher(client, teacherModel, reflectionPrompt, 0.3)` で生成
+   - temperature=0.3（低めで安定した診断を期待）
+   - 失敗時はエラーをスロー（フォールバックなし）
+
+4. **突然変異での利用**
+   - mutationPrompt に `評価の診断 (Actionable Side Information):\n${reflection}` として埋め込む
+   - 親プロンプト・最適化履歴・Pareto 上位候補とともに Teacher に渡し、改善プロンプトを生成させる
 
 ---
 
@@ -219,7 +264,14 @@ const result = await optimizePrompt("gepa", task, {
 | `GEMINI_API_KEY` | Gemini API キー（必須） | — |
 | `GOOGLE_APIKEY` | 代替キー（GEMINI_API_KEY が優先） | — |
 | `GEPA_MAX_CONCURRENT_CALLS` | LLM 同時呼び出し数の上限 | 20 |
-| `GEPA_LLM_CALL_LOGGING` | `"1"` で各呼び出しの開始・終了をログ出力 | 無効 |
+| `GEPA_LOG_LEVEL` | ログレベル: `off` \| `error` \| `info` \| `debug`。`debug` で LLM 呼び出しの開始・終了・所要時間を出力 | `off` |
+| `GEPA_LLM_CALL_LOGGING` | 後方互換: `"1"` で `debug` と同等 | 無効 |
+
+**ログレベルの挙動**:
+- `off`: ログ出力なし
+- `error`: エラー時のみ（LLM 呼び出し失敗、JSON パース失敗など）
+- `info`: 最適化の進捗ログ（verbose=true のとき）+ error
+- `debug`: LLM 呼び出しの開始・終了・所要時間・応答プレビュー（先頭100文字。FB 含む）+ info + error
 
 ---
 

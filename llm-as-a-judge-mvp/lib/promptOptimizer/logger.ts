@@ -1,9 +1,10 @@
 import type { OptimizationProgress } from "@/lib/promptOptimizer/types";
+import { isInfoEnabled } from "@/lib/promptOptimizer/logLevel";
 
 /**
  * 最適化ループの進捗ログを管理するクラス。
- * verbose=true でコンソール出力、onProgress コールバックでも通知。
- * ログは getLogs() で文字列配列として取得可能。
+ * verbose=true かつ GEPA_LOG_LEVEL=info 以上でコンソール出力。
+ * onProgress コールバックは常に呼び出す。ログは getLogs() で取得可能。
  */
 export class OptimizationLogger {
   private readonly logs: string[] = [];
@@ -15,11 +16,15 @@ export class OptimizationLogger {
     private readonly onProgress?: (progress: OptimizationProgress) => void
   ) {}
 
+  private shouldOutput(): boolean {
+    return this.verbose && isInfoEnabled();
+  }
+
   /** 一般ログメッセージを記録 */
   info(message: string): void {
     const entry = this.format("info", message);
     this.logs.push(entry);
-    if (this.verbose) console.info(entry);
+    if (this.shouldOutput()) console.info(entry);
   }
 
   /** 進捗イベントを記録し、コールバックを呼び出す */
@@ -41,7 +46,7 @@ export class OptimizationLogger {
       ` best=${bestStr}` +
       ` elapsed=${Math.round(elapsed / 1000)}s${msgStr}`;
     this.logs.push(entry);
-    if (this.verbose) console.info(entry);
+    if (this.shouldOutput()) console.info(entry);
     this.onProgress?.(full);
   }
 

@@ -79,7 +79,15 @@ export async function optimizeJudgePromptWithFewShot(
     maxRounds,
     demoThreshold,
     timeoutMs: budget?.compileTimeoutMs,
-    verbose: true
+    verbose: true,
+    onProgress: (p) => {
+      const msg = p.message ? ` | ${p.message}` : "";
+      console.info(
+        `[ax-opt][judge-fewshot:${domain}] step=${p.step} iter=${p.iteration}` +
+          ` current=${p.currentScore.toFixed(3)} best=${p.bestScore.toFixed(3)}` +
+          ` elapsed=${Math.round(p.elapsedMs / 1000)}s${msg}`
+      );
+    }
   });
 
   logAxOptimizationStart(`judge-fewshot:${domain}`, examples.length, {

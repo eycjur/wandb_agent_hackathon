@@ -6,6 +6,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Example, MetricFn, MetricScores } from "@/lib/promptOptimizer/types";
 import { withLimit } from "@/lib/promptOptimizer/concurrencyLimiter";
+import { isErrorEnabled } from "@/lib/promptOptimizer/logLevel";
 
 /** メトリクス結果（number | Record）をスカラーに正規化 */
 export function normalizeMetricResult(
@@ -88,7 +89,12 @@ export async function runProgram(
   const text = response.text ?? "{}";
   try {
     return JSON.parse(text) as Record<string, string>;
-  } catch {
+  } catch (err) {
+    if (isErrorEnabled()) {
+      console.warn(
+        `[runProgram] JSON パース失敗 — ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
     return Object.fromEntries(outputFields.map((f) => [f, ""]));
   }
 }
@@ -164,7 +170,12 @@ export async function evaluatePrompt(
           scores: vector,
           example
         };
-      } catch {
+      } catch (err) {
+        if (isErrorEnabled()) {
+          console.warn(
+            `[evaluatePrompt] 例の評価失敗 — ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
         return {
           prediction: Object.fromEntries(task.outputFields.map((f) => [f, ""])),
           score: 0,

@@ -46,7 +46,8 @@ export async function POST(request: NextRequest) {
       llmProvider: parsed.data.llmProvider,
       improvementMethod: parsed.data.improvementMethod,
       gepaBudget: parsed.data.gepaBudget,
-      fewShotBudget: parsed.data.fewShotBudget
+      fewShotBudget: parsed.data.fewShotBudget,
+      logLevel: parsed.data.logLevel
     });
 
     const response = JudgePromptImproveResponseSchema.parse(result);
