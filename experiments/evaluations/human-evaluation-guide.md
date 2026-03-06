@@ -27,7 +27,7 @@
 
 各ケースは、以下の 2 つを見ながら評価する。
 
-- [README.md](/Users/suguru.masui/wandb_agent_hackathon/experiments/cases/README.md)
+- [README.md](../cases/README.md)
   - `case_id`
   - `title`
   - `assumed_primary_role`
@@ -55,7 +55,7 @@
 
 ## 5. 評価手順
 
-1. [README.md](/Users/suguru.masui/wandb_agent_hackathon/experiments/cases/README.md) で `case_id` と `assumed_primary_role` を確認する
+1. [README.md](../cases/README.md) で `case_id` と `assumed_primary_role` を確認する
 2. 対応する `.txt` を開く
 3. `.txt` の本文をアプリへ貼り付けて生成する
 4. 元の入力文をざっと読む

@@ -1,5 +1,5 @@
-2020年にD2C startupへ参画し、Growth Marketingを担当しています。Main KPIは CVR, CAC, LTV で、paid ads, CRM, LP optimization, retention施策を横断して見ています。日次ではMeta/Googleの運用調整、週次ではcohort analysisとfunnel review、月次ではbudget allocationの見直しを行っています。
+2020年にD2C startupへ参画し、Growth Marketingを担当しています。Main KPIはCVR、CAC、LTVで、paid ads、CRM、LP optimization、retention施策を横断して見ています。日次ではMeta/Googleの運用調整、週次ではcohort analysisやfunnel review、月次ではbudget allocationの見直しやcreative performance reviewを行っています。立ち上がり当初は獲得寄りの施策が中心でしたが、途中から初回購入後の継続率やオンボーディング体験も含めて改善を見るようになりました。
 
-2022年にはnew user onboardingの改善プロジェクトをリードし、app内コミュニケーションとemail journeyを見直しました。A/B testを複数回まわし、初回購入後30日以内のrepeat rateを改善できました。また、creative briefingの型を整備して、designerやagencyとの連携もスムーズになりました。
+2022年にはnew user onboardingの改善プロジェクトをリードし、app内コミュニケーション、email journey、coupon exposureの設計を見直しました。A/B testを複数回回し、初回購入後30日以内のrepeat rate改善につながる勝ちパターンを検証しました。また、creative briefingの型を整備してdesignerやagencyとの連携も進め、施策実行のスピードを上げました。社内では、施策アイデアを出すだけでなく、executionまでやり切る役割を期待されることが多いです。
 
-自分の強みは、dataを見るだけでなく、施策実行までやり切るところにあります。特に、growthの観点から仮説を立てて高速で改善を回す動きは今後も伸ばしたいと考えています。
+最近は、単発のcampaign改善よりも、growth loop全体を見ながら優先順位を決める場面が増えています。自分の強みは、dataを見て仮説を立てるだけで終わらず、関係者を巻き込みながらすぐに施策へ落とし込める点だと思っています。一方で、英語の略語や社内用語が多く、自己PRとして外に出すときに読み手目線で整理し直す必要はあると感じています。
