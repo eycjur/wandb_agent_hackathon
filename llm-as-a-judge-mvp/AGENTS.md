@@ -89,6 +89,7 @@
 - domain フィルタは Trace API の `query` で `$getField("inputs.domain")` を指定
 
 ## 9. GEPA / Few-shot / GEPA Queue の注意
+- プロンプト最適化の全体像は `lib/promptOptimizer/README.md` を参照
 - GEPA の iteration / trial の仕組み・パラメータ・並列化は `lib/promptOptimizer/GEPA.md` を参照
 - GEPA 実装は `lib/promptOptimizer/GEPAOptimizer.ts`（`@ax-llm/ax` の AxGEPA ではない）
 - Few-shot 実装は `lib/promptOptimizer/BootstrapFewShotOptimizer.ts`（`@ax-llm/ax` の AxBootstrapFewShot ではない）
