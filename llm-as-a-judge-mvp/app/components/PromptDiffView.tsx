@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { memo, useMemo, type CSSProperties } from "react";
 import { diffLines } from "diff";
 
 /**
@@ -16,30 +16,32 @@ type Props = {
   initialHeight?: number;
 };
 
-export function PromptDiffView({
+type Row = { left: string; right: string; leftStyle: "removed" | "unchanged" | "empty"; rightStyle: "added" | "unchanged" | "empty" };
+
+export const PromptDiffView = memo(function PromptDiffView({
   before,
   after,
   beforeLabel = "現在のプロンプト",
   afterLabel = "改善案",
   initialHeight = 320
 }: Props) {
-  const diff = diffLines(before, after);
-
-  type Row = { left: string; right: string; leftStyle: "removed" | "unchanged" | "empty"; rightStyle: "added" | "unchanged" | "empty" };
-  const rows: Row[] = [];
-
-  for (const part of diff) {
-    const lines = (part.value || "").split("\n").filter((l, i, arr) => i < arr.length - 1 || l !== "");
-    for (const line of lines) {
-      if (part.removed) {
-        rows.push({ left: line, right: "", leftStyle: "removed", rightStyle: "empty" });
-      } else if (part.added) {
-        rows.push({ left: "", right: line, leftStyle: "empty", rightStyle: "added" });
-      } else {
-        rows.push({ left: line, right: line, leftStyle: "unchanged", rightStyle: "unchanged" });
+  const rows = useMemo<Row[]>(() => {
+    const diff = diffLines(before, after);
+    const result: Row[] = [];
+    for (const part of diff) {
+      const lines = (part.value || "").split("\n").filter((l, i, arr) => i < arr.length - 1 || l !== "");
+      for (const line of lines) {
+        if (part.removed) {
+          result.push({ left: line, right: "", leftStyle: "removed", rightStyle: "empty" });
+        } else if (part.added) {
+          result.push({ left: "", right: line, leftStyle: "empty", rightStyle: "added" });
+        } else {
+          result.push({ left: line, right: line, leftStyle: "unchanged", rightStyle: "unchanged" });
+        }
       }
     }
-  }
+    return result;
+  }, [before, after]);
 
   const cellStyle = (style: Row["leftStyle"] | Row["rightStyle"]) => {
     if (style === "removed")
@@ -78,7 +80,7 @@ export function PromptDiffView({
               }}
             >
               {rows.map((r, i) => (
-                <span key={i} style={{ display: "block", padding: "0 4px", ...cellStyle(r.leftStyle) }}>
+                <span key={`left-${i}`} style={{ display: "block", padding: "0 4px", ...cellStyle(r.leftStyle) }}>
                   {r.leftStyle === "removed" ? "- " : r.leftStyle === "unchanged" ? "  " : ""}
                   {r.left || "\u00A0"}
                 </span>
@@ -103,7 +105,7 @@ export function PromptDiffView({
               }}
             >
               {rows.map((r, i) => (
-                <span key={i} style={{ display: "block", padding: "0 4px", ...cellStyle(r.rightStyle) }}>
+                <span key={`right-${i}`} style={{ display: "block", padding: "0 4px", ...cellStyle(r.rightStyle) }}>
                   {r.rightStyle === "added" ? "+ " : r.rightStyle === "unchanged" ? "  " : ""}
                   {r.right || "\u00A0"}
                 </span>
@@ -114,4 +116,4 @@ export function PromptDiffView({
       </div>
     </div>
   );
-}
+});
