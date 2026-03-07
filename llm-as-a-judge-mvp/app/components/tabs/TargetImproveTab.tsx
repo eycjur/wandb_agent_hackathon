@@ -476,19 +476,19 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
             {improvementMethodDescription}
           </p>
         </div>
-        <div className="logLevelParams" style={{ marginTop: 16 }}>
-          <h4 style={{ marginBottom: 8, fontSize: "0.9rem" }}>ログレベル</h4>
-          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ minWidth: 140 }}>
+        <div className="logLevelParams promptImproveOptionsSection">
+          <h4 className="promptImproveOptionsSectionTitle">ログレベル</h4>
+          <label className="promptOptionField">
+            <span className="promptOptionFieldLabel">
               レベル:
               <HelpTooltip text={LOG_LEVEL_TOOLTIP} />
             </span>
             <select
+              className="promptOptionFieldControl"
               value={logLevel}
               onChange={(e) =>
                 setLogLevel((e.target.value || "") as LogLevelId | "")
               }
-              style={{ minWidth: 120 }}
             >
               <option value="">未指定</option>
               <option value="off">off</option>
@@ -499,15 +499,16 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
           </label>
         </div>
         {improvementMethod === "fewshot" && (
-          <div className="fewShotParams" style={{ marginTop: 16 }}>
-            <h4 style={{ marginBottom: 8, fontSize: "0.9rem" }}>Few-shot パラメータ</h4>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ minWidth: 140 }}>
+          <div className="fewShotParams promptImproveOptionsSection">
+            <h4 className="promptImproveOptionsSectionTitle">Few-shot パラメータ</h4>
+            <div className="promptOptionFieldList">
+              <label className="promptOptionField">
+                <span className="promptOptionFieldLabel">
                   maxDemos:
                   <HelpTooltip text={FEWSHOT_PARAM_TOOLTIPS.maxDemos} />
                 </span>
                 <input
+                  className="promptOptionFieldControl"
                   type="number"
                   min={1}
                   max={8}
@@ -515,15 +516,15 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
                   onChange={(e) =>
                     setFewShotMaxDemos(Math.min(8, Math.max(1, Number(e.target.value) || 3)))
                   }
-                  style={{ width: 60 }}
                 />
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ minWidth: 140 }}>
+              <label className="promptOptionField">
+                <span className="promptOptionFieldLabel">
                   maxRounds:
                   <HelpTooltip text={FEWSHOT_PARAM_TOOLTIPS.maxRounds} />
                 </span>
                 <input
+                  className="promptOptionFieldControl"
                   type="number"
                   min={1}
                   max={10}
@@ -531,15 +532,15 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
                   onChange={(e) =>
                     setFewShotMaxRounds(Math.min(10, Math.max(1, Number(e.target.value) || 2)))
                   }
-                  style={{ width: 60 }}
                 />
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ minWidth: 140 }}>
+              <label className="promptOptionField">
+                <span className="promptOptionFieldLabel">
                   demoThreshold:
                   <HelpTooltip text={FEWSHOT_PARAM_TOOLTIPS.demoThreshold} />
                 </span>
                 <input
+                  className="promptOptionFieldControl"
                   type="number"
                   min={0}
                   max={1}
@@ -550,15 +551,15 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
                       Math.min(1, Math.max(0, Number(e.target.value) || 0.5))
                     )
                   }
-                  style={{ width: 60 }}
                 />
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ minWidth: 140 }}>
+              <label className="promptOptionField">
+                <span className="promptOptionFieldLabel">
                   timeout:
                   <HelpTooltip text={FEWSHOT_PARAM_TOOLTIPS.compileTimeoutSeconds} />
                 </span>
                 <input
+                  className="promptOptionFieldControl"
                   type="number"
                   min={0}
                   max={600}
@@ -566,50 +567,50 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
                   onChange={(e) =>
                     setFewShotTimeoutSeconds(Math.max(0, Number(e.target.value) || 0))
                   }
-                  style={{ width: 60 }}
                 />
               </label>
             </div>
           </div>
         )}
         {improvementMethod === "gepa" && (
-          <div className="gepaParams" style={{ marginTop: 16 }}>
-            <h4 style={{ marginBottom: 8, fontSize: "0.9rem" }}>GEPA パラメータ</h4>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ minWidth: 140 }}>
+          <div className="gepaParams promptImproveOptionsSection">
+            <h4 className="promptImproveOptionsSectionTitle">GEPA パラメータ</h4>
+            <div className="promptOptionFieldList">
+              <label className="promptOptionField">
+                <span className="promptOptionFieldLabel">
                   maxIterations:
                   <HelpTooltip text={GEPA_PARAM_TOOLTIPS.maxIterations} />
                 </span>
                 <input
+                  className="promptOptionFieldControl"
                   type="number"
                   min={1}
                   max={10}
                   value={gepaMaxIterations}
                   onChange={(e) => setGepaMaxIterations(Number(e.target.value) || 2)}
-                  style={{ width: 60 }}
                 />
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ minWidth: 140 }}>
+              <label className="promptOptionField">
+                <span className="promptOptionFieldLabel">
                   numTrials:
                   <HelpTooltip text={GEPA_PARAM_TOOLTIPS.numTrials} />
                 </span>
                 <input
+                  className="promptOptionFieldControl"
                   type="number"
                   min={1}
                   max={10}
                   value={gepaNumTrials}
                   onChange={(e) => setGepaNumTrials(Number(e.target.value) || 3)}
-                  style={{ width: 60 }}
                 />
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ minWidth: 140 }}>
+              <label className="promptOptionField">
+                <span className="promptOptionFieldLabel">
                   earlyStoppingTrials:
                   <HelpTooltip text={GEPA_PARAM_TOOLTIPS.earlyStoppingTrials} />
                 </span>
                 <input
+                  className="promptOptionFieldControl"
                   type="number"
                   min={1}
                   max={5}
@@ -617,15 +618,15 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
                   onChange={(e) =>
                     setGepaEarlyStoppingTrials(Number(e.target.value) || 1)
                   }
-                  style={{ width: 60 }}
                 />
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ minWidth: 140 }}>
+              <label className="promptOptionField">
+                <span className="promptOptionFieldLabel">
                   maxExamples:
                   <HelpTooltip text={GEPA_PARAM_TOOLTIPS.maxExamples} />
                 </span>
                 <input
+                  className="promptOptionFieldControl"
                   type="number"
                   min={1}
                   max={50}
@@ -633,15 +634,15 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
                   onChange={(e) =>
                     setGepaMaxExamples(Math.min(50, Math.max(1, Number(e.target.value) || 6)))
                   }
-                  style={{ width: 60 }}
                 />
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ minWidth: 140 }}>
+              <label className="promptOptionField">
+                <span className="promptOptionFieldLabel">
                   timeout:
                   <HelpTooltip text={GEPA_PARAM_TOOLTIPS.compileTimeoutSeconds} />
                 </span>
                 <input
+                  className="promptOptionFieldControl"
                   type="number"
                   min={0}
                   max={600}
@@ -649,7 +650,6 @@ export function TargetImproveTab({ selectedDomain, completedStepIndices, onImpro
                   onChange={(e) =>
                     setGepaTimeoutSeconds(Math.max(0, Number(e.target.value) || 0))
                   }
-                  style={{ width: 60 }}
                 />
               </label>
             </div>

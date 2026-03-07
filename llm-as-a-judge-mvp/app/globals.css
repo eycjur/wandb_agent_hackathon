@@ -147,23 +147,25 @@ body {
 
 /* ── Prompt Improve Layout（LLMオプション右側） ──────────────────────────── */
 .promptImproveLayout {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
   gap: 24px;
   align-items: flex-start;
 }
 
 .promptImproveLayout > section {
-  flex: 1;
   min-width: 0;
 }
 
 .promptImproveOptions {
-  flex-shrink: 0;
-  width: 200px;
+  width: 100%;
   padding: 16px;
   background: var(--glass);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .promptImproveOptions h3 {
@@ -186,6 +188,59 @@ body {
 
 .promptImproveOptions .axMethodRow .domainSelectorButtons {
   width: 100%;
+}
+
+.promptImproveOptionsSection {
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(9, 15, 31, 0.28);
+}
+
+.promptImproveOptionsSectionTitle {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.promptOptionFieldList {
+  display: grid;
+  gap: 10px;
+}
+
+.promptOptionField {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, 116px);
+  gap: 12px;
+  align-items: center;
+  margin: 0;
+}
+
+.promptOptionFieldLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.promptOptionFieldControl {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-input);
+}
+
+.promptOptionFieldControl:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: var(--glow-cyan);
 }
 
 .domainSelectorLabel {
@@ -1207,6 +1262,14 @@ pre {
 
 /* ── Responsive ───────────────────────────────── */
 @media (max-width: 920px) {
+
+  .promptImproveLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .promptOptionField {
+    grid-template-columns: 1fr;
+  }
 
   .workspace,
   .evaluationSplit {
