@@ -3,18 +3,7 @@
 import dynamic from "next/dynamic";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
 import type { DomainSessionState } from "@/lib/ui/domainSession";
-
-type EvaluationResult = {
-  domain: DomainId;
-  rubricVersion: number;
-  passThreshold: number;
-  pass: boolean;
-  userInput: string;
-  generatedOutput: string;
-  score: number;
-  reason: string;
-  createdAt: string;
-};
+import type { EvaluationResult } from "@/lib/ui/evaluation";
 
 const EvaluationContent = dynamic(
   () => import("./EvaluateTabContent").then((m) => m.EvaluateTabContent),

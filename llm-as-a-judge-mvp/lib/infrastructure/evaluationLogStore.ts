@@ -5,12 +5,14 @@
  */
 
 import type { DomainId } from "@/lib/config/domainPromptLoader";
+import type { EvaluationSourceType } from "@/lib/contracts/generateEvaluate";
 
 export interface EvaluationLogRecord {
   id: string;
   domain: DomainId;
   userInput: string;
   generatedOutput: string;
+  sourceType: EvaluationSourceType;
   judgeResult: {
     score: number;
     reason: string;
@@ -32,6 +34,7 @@ export interface SaveEvaluationLogInput {
   domain: DomainId;
   userInput: string;
   generatedOutput: string;
+  sourceType: EvaluationSourceType;
   judgeResult: {
     score: number;
     reason: string;
@@ -47,6 +50,7 @@ export async function saveEvaluationLog(input: SaveEvaluationLogInput): Promise<
     domain: input.domain,
     userInput: input.userInput,
     generatedOutput: input.generatedOutput,
+    sourceType: input.sourceType,
     judgeResult: input.judgeResult,
     createdAt: new Date().toISOString()
   };

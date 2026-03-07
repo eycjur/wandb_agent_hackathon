@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
       pass,
       passThreshold: judgeResult.passThreshold,
       rubricVersion: judgeResult.rubricVersion,
+      sourceType: parsedRequest.data.sourceType,
       userInput: parsedRequest.data.userInput,
       generatedOutput: parsedRequest.data.generatedOutput,
       reason: judgeResult.reason
@@ -81,6 +82,7 @@ export async function POST(request: NextRequest) {
       domain: judgeResult.domain,
       userInput: parsedRequest.data.userInput,
       generatedOutput: parsedRequest.data.generatedOutput,
+      sourceType: parsedRequest.data.sourceType,
       judgeResult: {
         score: judgeResult.score,
         reason: judgeResult.reason,

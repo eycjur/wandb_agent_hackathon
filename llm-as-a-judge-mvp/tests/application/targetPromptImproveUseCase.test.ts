@@ -30,6 +30,7 @@ const failedRecords: EvaluationLogRecord[] = [
     domain: "resume_summary",
     userInput: "input1",
     generatedOutput: "output1",
+    sourceType: "generated",
     judgeResult: {
       score: 1,
       reason: "weak",
@@ -44,6 +45,7 @@ const failedRecords: EvaluationLogRecord[] = [
     domain: "resume_summary",
     userInput: "input2",
     generatedOutput: "output2",
+    sourceType: "generated",
     judgeResult: {
       score: 2,
       reason: "weak",
@@ -58,6 +60,7 @@ const failedRecords: EvaluationLogRecord[] = [
     domain: "resume_summary",
     userInput: "input3",
     generatedOutput: "output3",
+    sourceType: "generated",
     judgeResult: {
       score: 2,
       reason: "weak",
