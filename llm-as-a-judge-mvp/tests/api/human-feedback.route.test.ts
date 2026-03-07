@@ -13,6 +13,7 @@ describe("POST /api/human-feedback", () => {
     domain: "resume_summary",
     userInput: "resume text",
     generatedOutput: "summary",
+    sourceType: "manual",
     judgeResult: { score: 4, reason: "good", pass: true },
     humanScore: 5
   };
@@ -75,6 +76,7 @@ describe("POST /api/human-feedback", () => {
     expect(mockSave).toHaveBeenCalledWith(
       expect.objectContaining({
         domain: "resume_summary",
+        sourceType: "manual",
         humanScore: 5,
         judgeResult: { score: 4, reason: "good", pass: true }
       })
@@ -95,6 +97,7 @@ describe("GET /api/human-feedback", () => {
         domain: "resume_summary",
         userInput: "resume text",
         generatedOutput: "summary",
+        sourceType: "generated",
         judgeResult: { score: 4, reason: "ok", pass: true },
         humanScore: 4,
         createdAt: "2024-01-01T00:00:00.000Z"

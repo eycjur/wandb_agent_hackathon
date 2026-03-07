@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
 import type { DomainsListResponse } from "@/lib/contracts/generateEvaluate";
+import type { EvaluationResult } from "@/lib/ui/evaluation";
 import {
   createInitialDomainSessions,
   patchDomainSession,
@@ -13,18 +14,6 @@ import { GenerateTab } from "@/app/components/tabs/GenerateTab";
 import { EvaluateTabContent } from "@/app/components/tabs/EvaluateTabContent";
 import { JudgeImproveTab } from "@/app/components/tabs/JudgeImproveTab";
 import { TargetImproveTab } from "@/app/components/tabs/TargetImproveTab";
-
-type EvaluationResult = {
-  domain: DomainId;
-  rubricVersion: number;
-  passThreshold: number;
-  pass: boolean;
-  userInput: string;
-  generatedOutput: string;
-  score: number;
-  reason: string;
-  createdAt: string;
-};
 
 const VALID_DOMAINS = ["resume_summary", "resume_detail", "self_pr"] as const;
 type MainTab = "generation" | "evaluation" | "judge-improve" | "target-improve";

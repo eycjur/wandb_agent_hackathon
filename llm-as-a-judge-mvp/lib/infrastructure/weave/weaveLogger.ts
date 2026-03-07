@@ -5,6 +5,7 @@
  */
 
 import { getWeaveClient } from "./weaveClient";
+import type { EvaluationSourceType } from "@/lib/contracts/generateEvaluate";
 
 export type LogGenerateParams = {
   domain: string;
@@ -21,6 +22,7 @@ export type LogJudgeParams = {
   pass: boolean;
   passThreshold: number;
   rubricVersion: number;
+  sourceType: EvaluationSourceType;
   /** 実際の入出力・理由（Trace に含める） */
   userInput: string;
   generatedOutput: string;
@@ -31,6 +33,7 @@ export type LogHumanFeedbackParams = {
   domain: string;
   humanScore: number;
   judgeScore?: number;
+  sourceType: EvaluationSourceType;
   /** 手動評価のコメント（Weave に保存） */
   humanComment?: string;
   userInput?: string;

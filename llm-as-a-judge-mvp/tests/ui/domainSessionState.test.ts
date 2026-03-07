@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   createInitialDomainSessions,
+  deriveEvaluationSourceType,
+  isEvaluationDraftSyncedWithSeed,
   patchDomainSession,
-  selectDomainSession
+  selectDomainSession,
+  shouldSyncEvaluationDraftWithGenerated
 } from "@/lib/ui/domainSession";
 
 type DummyResult = {
@@ -52,5 +55,47 @@ describe("domainSession state", () => {
     expect(detailSession.progressStage).toBe("idle");
     expect(detailSession.requestError).toBe("");
     expect(initialSessions.resume_summary.progressStage).toBe("idle");
+  });
+
+  it("生成結果を読み込んだ直後は generated と判定される", () => {
+    const initialSessions = createInitialDomainSessions<DummyResult>();
+    const syncedSessions = patchDomainSession(initialSessions, "resume_summary", {
+      evaluationDraftUserInput: "resume text",
+      evaluationDraftOutput: "summary",
+      evaluationDraftSeedUserInput: "resume text",
+      evaluationDraftSeedOutput: "summary"
+    });
+
+    const summarySession = selectDomainSession(syncedSessions, "resume_summary");
+    expect(isEvaluationDraftSyncedWithSeed(summarySession)).toBe(true);
+    expect(deriveEvaluationSourceType(summarySession)).toBe("generated");
+    expect(shouldSyncEvaluationDraftWithGenerated(summarySession)).toBe(true);
+  });
+
+  it("生成結果読込後に編集すると generated_edited と判定される", () => {
+    const initialSessions = createInitialDomainSessions<DummyResult>();
+    const editedSessions = patchDomainSession(initialSessions, "resume_summary", {
+      evaluationDraftUserInput: "resume text",
+      evaluationDraftOutput: "edited summary",
+      evaluationDraftSeedUserInput: "resume text",
+      evaluationDraftSeedOutput: "summary"
+    });
+
+    const summarySession = selectDomainSession(editedSessions, "resume_summary");
+    expect(isEvaluationDraftSyncedWithSeed(summarySession)).toBe(false);
+    expect(deriveEvaluationSourceType(summarySession)).toBe("generated_edited");
+    expect(shouldSyncEvaluationDraftWithGenerated(summarySession)).toBe(false);
+  });
+
+  it("生成結果未読込の手入力は manual と判定される", () => {
+    const initialSessions = createInitialDomainSessions<DummyResult>();
+    const manualSessions = patchDomainSession(initialSessions, "resume_summary", {
+      evaluationDraftUserInput: "resume text",
+      evaluationDraftOutput: "manual summary"
+    });
+
+    const summarySession = selectDomainSession(manualSessions, "resume_summary");
+    expect(deriveEvaluationSourceType(summarySession)).toBe("manual");
+    expect(shouldSyncEvaluationDraftWithGenerated(summarySession)).toBe(false);
   });
 });

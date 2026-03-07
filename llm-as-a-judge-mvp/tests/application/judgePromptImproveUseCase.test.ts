@@ -37,6 +37,7 @@ const feedbackRecords: HumanFeedbackRecord[] = [
     domain: "resume_summary",
     userInput: "input1",
     generatedOutput: "output1",
+    sourceType: "generated",
     judgeResult: { score: 2, reason: "short", pass: false },
     humanScore: 4,
     createdAt: "2026-03-01T00:00:00.000Z"
@@ -46,6 +47,7 @@ const feedbackRecords: HumanFeedbackRecord[] = [
     domain: "resume_summary",
     userInput: "input2",
     generatedOutput: "output2",
+    sourceType: "generated",
     judgeResult: { score: 2, reason: "short", pass: false },
     humanScore: 5,
     createdAt: "2026-03-01T00:00:00.000Z"
@@ -55,6 +57,7 @@ const feedbackRecords: HumanFeedbackRecord[] = [
     domain: "resume_summary",
     userInput: "input3",
     generatedOutput: "output3",
+    sourceType: "generated",
     judgeResult: { score: 3, reason: "ok", pass: false },
     humanScore: 1,
     createdAt: "2026-03-01T00:00:00.000Z"

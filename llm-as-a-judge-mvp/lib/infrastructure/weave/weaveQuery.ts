@@ -6,6 +6,9 @@
  * weave SDK は entity/project 形式を使用するため、getWeaveProjectId() で取得する。
  */
 
+import type { EvaluationSourceType } from "@/lib/contracts/generateEvaluate";
+import { getWeaveProjectId } from "./weaveProjectId";
+
 const TRACE_API_BASE = "https://trace.wandb.ai";
 
 export type HumanFeedbackFromWeave = {
@@ -17,11 +20,10 @@ export type HumanFeedbackFromWeave = {
   humanComment?: string;
   userInput?: string;
   generatedOutput?: string;
+  sourceType?: EvaluationSourceType;
   judgeResult?: { score: number; reason: string; pass: boolean };
   createdAt: string;
 };
-
-import { getWeaveProjectId } from "./weaveProjectId";
 
 /**
  * human_feedback_log のトレースを Weave から取得
@@ -45,7 +47,7 @@ export async function fetchHumanFeedbackFromWeave(options: {
   const body = {
     project_id: projectId,
     filter: { trace_roots_only: true },
-    limit: Math.min((options.limit ?? 50) * 5, 100),
+    limit: Math.min(limit * 5, 100),
     offset: 0,
     sort_by: [{ field: "started_at", direction: "desc" }],
     include_feedback: false
@@ -88,7 +90,7 @@ export async function fetchHumanFeedbackFromWeave(options: {
         const domain = String(inputs.domain ?? "resume_summary");
         if (options.domain && domain !== options.domain) continue;
 
-        if (results.length >= (options.limit ?? 50)) break;
+        if (results.length >= limit) break;
 
         results.push({
           id: call.id ?? `wf_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -99,6 +101,7 @@ export async function fetchHumanFeedbackFromWeave(options: {
           humanComment: inputs.humanComment as string | undefined,
           userInput: inputs.userInput as string | undefined,
           generatedOutput: inputs.generatedOutput as string | undefined,
+          sourceType: inputs.sourceType as EvaluationSourceType | undefined,
           judgeResult: inputs.judgeResult as { score: number; reason: string; pass: boolean } | undefined,
           createdAt: call.started_at ?? new Date().toISOString()
         });
@@ -123,6 +126,7 @@ export type JudgeLogFromWeave = {
   rubricVersion: number;
   userInput?: string;
   generatedOutput?: string;
+  sourceType?: EvaluationSourceType;
   reason?: string;
   createdAt: string;
 };
@@ -195,7 +199,7 @@ export async function fetchJudgeLogsFromWeave(options: {
   const body = {
     project_id: projectId,
     filter: { trace_roots_only: true },
-    limit: Math.min((options.limit ?? 50) * 5, 100),
+    limit: Math.min(limit * 5, 100),
     offset: 0,
     sort_by: [{ field: "started_at", direction: "desc" }],
     include_feedback: false
@@ -239,7 +243,7 @@ export async function fetchJudgeLogsFromWeave(options: {
         const domain = String(inputs.domain ?? "resume_summary");
         if (options.domain && domain !== options.domain) continue;
 
-        if (results.length >= (options.limit ?? 50)) break;
+        if (results.length >= limit) break;
 
         results.push({
           id: call.id ?? `jl_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -250,6 +254,7 @@ export async function fetchJudgeLogsFromWeave(options: {
           rubricVersion: Number(inputs.rubricVersion ?? 1),
           userInput: inputs.userInput as string | undefined,
           generatedOutput: inputs.generatedOutput as string | undefined,
+          sourceType: inputs.sourceType as EvaluationSourceType | undefined,
           reason: inputs.reason as string | undefined,
           createdAt: call.started_at ?? new Date().toISOString()
         });
