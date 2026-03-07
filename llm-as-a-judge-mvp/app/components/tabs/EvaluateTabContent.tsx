@@ -130,7 +130,7 @@ export function EvaluateTabContent({
   useEffect(() => {
     if (!loading) return;
     const startAt = Date.now();
-    const intervalId = setInterval(() => setElapsedMs(Date.now() - startAt), 200);
+    const intervalId = setInterval(() => setElapsedMs(Date.now() - startAt), 1000);
     return () => clearInterval(intervalId);
   }, [loading]);
 
