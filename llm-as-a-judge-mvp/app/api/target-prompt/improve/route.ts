@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const failedRecords =
+    const loadedRecords =
       parsed.data.llmProvider === "ax" && parsed.data.improvementMethod === "fewshot"
         ? await loadTargetExamplesForFewShot(
             parsed.data.domain,
@@ -46,16 +46,29 @@ export async function POST(request: NextRequest) {
             parsed.data.failedLimit,
             parsed.data.minScore
           );
+    const selectedIdSet = new Set(parsed.data.selectedRecordIds);
+    const failedRecords =
+      selectedIdSet.size > 0
+        ? loadedRecords.filter((record) => selectedIdSet.has(record.id))
+        : loadedRecords;
 
     const result = await generateTargetPromptImprovement(failedRecords, parsed.data.domain, {
       llmProvider: parsed.data.llmProvider,
-      improvementMethod: parsed.data.improvementMethod
+      improvementMethod: parsed.data.improvementMethod,
+      gepaBudget: parsed.data.gepaBudget,
+      fewShotBudget: parsed.data.fewShotBudget,
+      logLevel: parsed.data.logLevel
     });
 
     const response = TargetPromptImproveResponseSchema.parse(result);
     return NextResponse.json(response, { status: 200 });
   } catch (error) {
     if (error instanceof AppError) {
+      if (error.status === 502) {
+        console.error(
+          `[/api/target-prompt/improve] 502 PROVIDER_ERROR: code=${error.code} message=${error.exposeMessage} detail=${error.message}`
+        );
+      }
       return jsonError(error.status, error.code, error.exposeMessage);
     }
     console.error("[/api/target-prompt/improve] error:", error);

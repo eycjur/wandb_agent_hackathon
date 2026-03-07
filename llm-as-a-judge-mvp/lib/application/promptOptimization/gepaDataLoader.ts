@@ -1,12 +1,10 @@
 import type { DomainId } from "@/lib/config/domainPromptLoader";
-import { getDomainPromptConfig } from "@/lib/config/domainPromptLoader";
 import {
   listHumanFeedback,
   type HumanFeedbackRecord
 } from "@/lib/infrastructure/humanFeedbackStore";
 import {
   listEvaluationLogs,
-  listFailedEvaluations,
   type EvaluationLogRecord
 } from "@/lib/infrastructure/evaluationLogStore";
 import {
@@ -87,32 +85,27 @@ export async function loadTargetFailuresForPromptOptimization(
   failedLimit: number,
   minScore?: number
 ): Promise<EvaluationLogRecord[]> {
-  const promptConfig = await getDomainPromptConfig(domain);
-  const effectiveMinScore = minScore ?? promptConfig.passThreshold;
+  void minScore;
 
   if (isWeaveConfigured()) {
     try {
       const fromWeave = await fetchJudgeLogsFromWeave({
         domain,
-        limit: failedLimit * 2
+        limit: Math.max(failedLimit * 3, failedLimit)
       });
       return fromWeave
         .map(toEvaluationLogRecordFromWeave)
-        .filter(
-          (r) =>
-            !r.judgeResult.pass || r.judgeResult.score < effectiveMinScore
-        )
         .slice(0, failedLimit);
     } catch {
       // fall through to in-memory store only when Weave request itself fails
     }
   }
 
-  return listFailedEvaluations({
+  const records = await listEvaluationLogs({
     domain,
-    limit: failedLimit,
-    minScore: effectiveMinScore
+    limit: Math.max(failedLimit * 3, failedLimit)
   });
+  return records.slice(0, failedLimit);
 }
 
 export async function loadTargetExamplesForFewShot(

@@ -1,267 +1,208 @@
 /**
- * AxGEPA による生成プロンプト最適化
- * 不合格ケースの userInput を用い、Judge スコアが向上するようプロンプトを最適化する
+ * GEPA による Target（生成）プロンプト最適化
+ * lib/promptOptimizer の GEPAOptimizer を使用
  */
-import { ai, ax, AxAIGoogleGeminiModel, AxGEPA } from "@ax-llm/ax";
 import { AppError } from "@/lib/errors";
 import { getDomainPromptConfig } from "@/lib/config/domainPromptLoader";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
 import { GEPA_MODEL, JUDGE_MODEL, TARGET_MODEL } from "@/lib/config/llm";
 import type { EvaluationLogRecord } from "@/lib/infrastructure/evaluationLogStore";
+import { calculateTargetGepaMetricBreakdown } from "@/lib/application/promptOptimization/gepaMetrics";
+import type { GepaCompileBudget } from "@/lib/application/promptOptimization/gepaRuntimeConfig";
 import {
-  scoreTargetOutputFormat,
-  type TargetGepaMetricExample
-} from "@/lib/application/promptOptimization/gepaMetrics";
-import {
-  type GepaCompileBudget,
-  GEPA_TARGET_FAST_UI_BUDGET,
-  truncateForGepa
+  truncateForGepa,
+  GEPA_TARGET_FAST_UI_BUDGET
 } from "@/lib/application/promptOptimization/gepaRuntimeConfig";
 import {
-  createAxOptimizerEventLogger,
-  createAxProgressLogger,
-  createAxMultiMetricLogger,
   logAxOptimizationDone,
   logAxOptimizationStart
 } from "@/lib/application/promptOptimization/axOptimizationLogger";
+import type { Example, OptimizationTask } from "@/lib/promptOptimizer/types";
+import { GEPAOptimizer } from "@/lib/promptOptimizer";
+import {
+  createGeminiClient,
+  runProgram
+} from "@/lib/promptOptimizer/runner";
 
 export interface GepaTargetOptimizationResult {
   suggestion: string;
-  analysisSummary: string;
+  optimizationLog?: string[];
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("metric timeout")), timeoutMs);
-      })
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+function toExample(
+  record: EvaluationLogRecord,
+  maxInputChars: number,
+  maxOutputChars: number
+): Example {
+  return {
+    inputs: {
+      userInput: truncateForGepa(record.userInput ?? "", maxInputChars)
+    },
+    expectedOutputs: {
+      passThreshold: String(record.judgeResult.passThreshold),
+      baselineScore: String(record.judgeResult.score),
+      domain: record.domain
+    }
+  };
 }
 
-/**
- * 不合格・低スコアの評価データを用いて AxGEPA で生成プロンプトを最適化する
- * メトリクス: 生成出力を Judge で評価し、スコアを最大化
- */
+async function runJudge(
+  judgeInstruction: string,
+  userInput: string,
+  generatedOutput: string,
+  apiKey?: string
+): Promise<{ score: number; reason: string }> {
+  const client = createGeminiClient(apiKey);
+  const result = await runProgram(
+    client,
+    JUDGE_MODEL,
+    judgeInstruction,
+    { userInput, generatedOutput },
+    ["score", "reason"]
+  );
+  return {
+    score: Number(result.score ?? 0),
+    reason: result.reason ?? ""
+  };
+}
+
 export async function optimizeTargetPromptWithGEPA(
   failedRecords: EvaluationLogRecord[],
   domain: DomainId,
-  compileBudget: GepaCompileBudget = GEPA_TARGET_FAST_UI_BUDGET
+  budget: GepaCompileBudget = GEPA_TARGET_FAST_UI_BUDGET
 ): Promise<GepaTargetOptimizationResult> {
-  if (failedRecords.length < 1) {
+  const usableRecords = failedRecords.filter(
+    (r) => r.userInput.trim().length > 0 && r.generatedOutput.trim().length > 0
+  );
+  if (usableRecords.length < 1) {
     return {
       suggestion:
-        "AxGEPA 最適化には不合格・低スコアの評価データが最低1件必要です。生成・評価を実行してから再度お試しください。",
-      analysisSummary: "データ不足（1件未満）"
+        "GEPA には評価ログが最低1件必要です。生成・評価を実行してから再度お試しください。"
     };
-  }
-
-  const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_APIKEY ?? "";
-  if (!apiKey) {
-    throw new AppError(
-      500,
-      "CONFIG_ERROR",
-      "サーバー設定エラーが発生しました。",
-      "GEMINI_API_KEY or GOOGLE_APIKEY is not set."
-    );
   }
 
   const promptConfig = await getDomainPromptConfig(domain);
-  const budget = compileBudget;
-  const generatorProgram = ax("userInput:string -> generatedOutput:string", {
-    description: promptConfig.targetInstruction
-  });
+  const judgeInstruction = promptConfig.judgeInstruction;
 
-  const judgeProgram = ax(
-    "userInput:string, generatedOutput:string -> score:number, reason:string",
-    { description: promptConfig.judgeInstruction }
+  // スコアが低い例を優先（改善効果が高い）
+  const sortedByLowScore = [...usableRecords].sort(
+    (a, b) =>
+      (a.judgeResult?.score ?? 1) - (b.judgeResult?.score ?? 1)
   );
 
-  const examples = failedRecords.slice(0, budget.maxExamples).map((r) => ({
-    userInput: truncateForGepa(r.userInput, budget.maxInputChars),
-    passThreshold: r.judgeResult.passThreshold,
-    baselineScore: r.judgeResult.score,
-    domain
-  }));
-  const logMetric = createAxMultiMetricLogger(`target-gepa:${domain}`);
-  const judgeFeedbackCache = new Map<string, { score: number; reason: string }>();
+  const examples: Example[] = sortedByLowScore
+    .slice(0, budget.maxExamples)
+    .map((r) => toExample(r, budget.maxInputChars, budget.maxOutputChars));
 
-  const targetAI = ai({
-    name: "google-gemini",
-    apiKey,
-    config: { model: TARGET_MODEL as AxAIGoogleGeminiModel, temperature: 0.7 }
-  });
+  const judgeCache = new Map<string, { score: number; formatScore: number }>();
 
-  const judgeAI = ai({
-    name: "google-gemini",
-    apiKey,
-    config: { model: GEPA_MODEL as AxAIGoogleGeminiModel, temperature: 0 }
-  });
-  const teacherAI = ai({
-    name: "google-gemini",
-    apiKey,
-    config: { model: JUDGE_MODEL as AxAIGoogleGeminiModel, temperature: 0 }
-  });
+  const metric: OptimizationTask["metric"] = async (prediction, example) => {
+    const generatedOutput =
+      typeof prediction.generatedOutput === "string"
+        ? prediction.generatedOutput.trim()
+        : "";
+    if (!generatedOutput) return { score: 0, formatScore: 0 };
 
-  const metricFn = async (
-    arg: Readonly<{ prediction: unknown; example: unknown }>
-  ): Promise<Record<string, number>> => {
-    const rawOutput = (arg.prediction as { generatedOutput?: string })?.generatedOutput?.trim();
-    const output = rawOutput
-      ? truncateForGepa(rawOutput, budget.maxOutputChars)
-      : rawOutput;
-    if (!output) {
-      const zero = {
-        absoluteQuality: 0,
-        domainFormatFitHalf: 0
-      };
-      logMetric(zero);
-      return zero;
-    }
-
-    const ex = arg.example as TargetGepaMetricExample;
-    const userInput = ex?.userInput ?? "";
+    const userInput = example.inputs.userInput ?? "";
+    const cacheKey = `${userInput}:::${generatedOutput}`;
+    const cached = judgeCache.get(cacheKey);
+    if (cached != null) return { score: cached.score, formatScore: cached.formatScore * 0.5 };
 
     try {
-      const metricTimeoutMs = budget.metricCallTimeoutMs ?? 7000;
-      const judgeResult = await withTimeout(
-        judgeProgram.forward(
-          judgeAI,
-          { userInput, generatedOutput: output },
-          { stream: false }
-        ),
-        metricTimeoutMs
+      const judgeResult = await runJudge(
+        judgeInstruction,
+        userInput,
+        generatedOutput
       );
-      judgeFeedbackCache.set(`${userInput}:::${output}`, {
-        score: Number(judgeResult.score ?? 0),
-        reason: typeof judgeResult.reason === "string" ? judgeResult.reason : ""
-      });
-
-      const rawScore = Number(judgeResult.score);
-      const absoluteQuality = Number.isFinite(rawScore)
-        ? Math.max(0, Math.min(1, rawScore / 5))
-        : 0;
-      const formatScore = scoreTargetOutputFormat(output, ex?.domain ?? domain);
-      // 形式適合は 1/2 スケールで評価する
-      const breakdown = {
-        absoluteQuality,
-        domainFormatFitHalf: Math.max(0, Math.min(1, formatScore / 2))
+      const targetExample = {
+        userInput,
+        passThreshold: Number(example.expectedOutputs?.passThreshold ?? 0),
+        baselineScore: Number(example.expectedOutputs?.baselineScore ?? 0),
+        domain: (example.expectedOutputs?.domain ?? domain) as DomainId
       };
-      logMetric(breakdown);
-      return breakdown;
+      const breakdown = Number.isFinite(judgeResult.score)
+        ? calculateTargetGepaMetricBreakdown(
+            judgeResult.score,
+            generatedOutput,
+            targetExample
+          )
+        : { score: 0, formatScore: 0 };
+      judgeCache.set(cacheKey, breakdown);
+      return { score: breakdown.score, formatScore: breakdown.formatScore * 0.5 };
     } catch (error) {
-      if (error instanceof AppError) {
-        throw error;
-      }
-      throw new AppError(
-        502,
-        "PROVIDER_ERROR",
-        "GEPA メトリクス評価に失敗しました。",
-        error instanceof Error ? error.message : "Target GEPA metric evaluation failed."
+      const detail = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `[ax-opt][target-gepa:${domain}] metric_error=judge_eval_failed detail=${detail}`
       );
+      return { score: 0, formatScore: 0 };
     }
   };
 
-  const optimizer = new AxGEPA({
-    studentAI: targetAI,
-    teacherAI,
+  const task: OptimizationTask = {
+    initialPrompt: promptConfig.targetInstruction,
+    inputFields: ["userInput"],
+    outputFields: ["generatedOutput"],
+    examples,
+    metric
+  };
+
+  const optimizer = new GEPAOptimizer({
+    studentModel: TARGET_MODEL,
+    teacherModel: GEPA_MODEL,
     numTrials: budget.numTrials,
-    minibatch: true,
     minibatchSize: budget.minibatchSize,
+    maxIterations: budget.maxIterations,
     earlyStoppingTrials: budget.earlyStoppingTrials,
-    onProgress: createAxProgressLogger(`target-gepa:${domain}`),
-    optimizerLogger: createAxOptimizerEventLogger(`target-gepa:${domain}`),
-    debugOptimizer: true,
-    verbose: false
+    timeoutMs:
+      budget.compileTimeoutMs != null &&
+      budget.compileTimeoutMs < Number.MAX_SAFE_INTEGER
+        ? budget.compileTimeoutMs
+        : undefined,
+    verbose: true,
+    onProgress: (p) => {
+      const bestStr =
+        p.bestScores && Object.keys(p.bestScores).length > 0
+          ? Object.entries(p.bestScores)
+              .map(([k, v]) => `${k}=${Number(v).toFixed(2)}`)
+              .join(", ")
+          : p.bestScore.toFixed(3);
+      console.info(
+        `[ax-opt][target-gepa:${domain}] step=${p.step} iter=${p.iteration} trial=${p.trial ?? "-"} current=${p.currentScore.toFixed(3)} best=${bestStr} elapsed=${p.elapsedMs}ms`
+      );
+    }
   });
 
+  logAxOptimizationStart(`target-gepa:${domain}`, examples.length, {
+    maxIterations: budget.maxIterations,
+    numTrials: budget.numTrials
+  });
+
+  let result;
   try {
-    logAxOptimizationStart(`target-gepa:${domain}`, examples.length);
-    const result = await optimizer.compile(
-      generatorProgram,
-      examples,
-      metricFn as unknown as Parameters<typeof optimizer.compile>[2],
-      {
-        feedbackExamples: examples,
-        feedbackFn: ({ prediction, example }) => {
-          const pred = prediction as { generatedOutput?: unknown };
-          const ex = example as TargetGepaMetricExample;
-          const output =
-            typeof pred?.generatedOutput === "string"
-              ? pred.generatedOutput.trim()
-              : "";
-          if (!output) {
-            return "generatedOutput が空です。入力に対して具体的な出力を返してください。";
-          }
-          const userInput = ex?.userInput ?? "";
-          const judgeFeedback = judgeFeedbackCache.get(`${userInput}:::${output}`);
-          if (!judgeFeedback) {
-            return "Judge評価のFBが未取得です。スコア・理由を改善案に反映してください。";
-          }
-          const passThreshold = Number(ex?.passThreshold ?? 4);
-          if (judgeFeedback.score < passThreshold) {
-            return `Judge評価: ${judgeFeedback.score}/${passThreshold}。理由: ${judgeFeedback.reason || "理由なし"}。この不合格理由を解消するよう改善してください。`;
-          }
-          return `Judge評価は合格圏です（${judgeFeedback.score}/${passThreshold}）。理由の一貫性を維持しつつ baseline(${Number(ex?.baselineScore ?? 0)})超えを狙ってください。`;
-        },
-        maxMetricCalls: budget.maxMetricCalls,
-        maxIterations: budget.maxIterations
-      }
-    );
-
-    const r = result as unknown as {
-      optimizedProgram?: { instruction?: string };
-      paretoFront?: ReadonlyArray<{ configuration?: Record<string, unknown> }>;
-      bestConfiguration?: Record<string, unknown>;
-      stats?: { bestConfiguration?: Record<string, unknown> };
-    };
-    const config =
-      r.optimizedProgram ?? r.paretoFront?.[0]?.configuration ?? r.bestConfiguration ?? r.stats?.bestConfiguration;
-    const optimizedInstruction =
-      typeof r.optimizedProgram?.instruction === "string"
-        ? r.optimizedProgram.instruction
-        : typeof config?.instruction === "string"
-          ? config.instruction
-          : undefined;
-
-    const bestScore = (result as unknown as { bestScore?: number }).bestScore ?? 0;
-    logAxOptimizationDone(`target-gepa:${domain}`, bestScore);
-
-    if (!optimizedInstruction) {
-      throw new AppError(
-        502,
-        "PROVIDER_RESPONSE_INVALID",
-        "GEPA 最適化結果の取得に失敗しました。",
-        "optimized instruction is missing in GEPA result."
-      );
-    }
-
-    const suggestion = String(optimizedInstruction).trim();
-    if (!suggestion) {
-      throw new AppError(
-        502,
-        "PROVIDER_RESPONSE_INVALID",
-        "GEPA 最適化結果が空です。",
-        "optimized instruction is empty after trim."
-      );
-    }
-
-    return {
-      suggestion,
-      analysisSummary: `AxGEPA 最適化完了。ベストスコア: ${bestScore.toFixed(2)}、評価件数: ${examples.length}`
-    };
+    result = await optimizer.optimize(task);
   } catch (error) {
-    if (error instanceof AppError) throw error;
-    throw new AppError(
-      502,
-      "PROVIDER_ERROR",
-      "GEPA 最適化に失敗しました。",
-      error instanceof Error ? error.message : "AxGEPA compile failed."
-    );
+    const msg = error instanceof Error ? error.message : String(error);
+    if (
+      typeof msg === "string" &&
+      (msg.includes("signature") || msg.includes("undefined"))
+    ) {
+      throw new AppError(
+        502,
+        "PROVIDER_ERROR",
+        "GEPA 最適化中にエラーが発生しました。",
+        msg
+      );
+    }
+    throw error;
   }
+
+  logAxOptimizationDone(`target-gepa:${domain}`, result.bestScore);
+
+  const suggestion =
+    result.optimizedPrompt?.trim() ?? promptConfig.targetInstruction;
+
+  return {
+    suggestion,
+    optimizationLog: result.log
+  };
 }

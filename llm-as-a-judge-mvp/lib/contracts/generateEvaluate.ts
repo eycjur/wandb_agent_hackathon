@@ -16,6 +16,9 @@ export type LLMProviderId = z.infer<typeof LLMProviderSchema>;
 export const ImprovementMethodSchema = z.enum(["meta", "fewshot", "gepa"]);
 export type ImprovementMethodId = z.infer<typeof ImprovementMethodSchema>;
 
+export const LogLevelSchema = z.enum(["off", "error", "info", "debug"]);
+export type LogLevelId = z.infer<typeof LogLevelSchema>;
+
 export const ErrorCodeSchema = z.enum([
   "INVALID_JSON",
   "VALIDATION_ERROR",
@@ -169,20 +172,49 @@ export const WandbDashboardResponseSchema = WandbStatusResponseSchema.extend({
   dashboardUrl: z.union([z.string().url(), z.null()])
 });
 
+/** GEPA パラメータの UI 上書き（improvementMethod=gepa 時のみ有効） */
+export const GepaBudgetOverridesSchema = z
+  .object({
+    maxIterations: z.number().int().min(1).max(10).optional(),
+    numTrials: z.number().int().min(1).max(10).optional(),
+    earlyStoppingTrials: z.number().int().min(1).max(5).optional(),
+    compileTimeoutMs: z.number().int().min(0).max(600_000).optional(),
+    maxExamples: z.number().int().min(1).max(50).optional()
+  })
+  .optional();
+
+export type GepaBudgetOverrides = z.infer<typeof GepaBudgetOverridesSchema>;
+
+/** Few-shot パラメータの UI 上書き（improvementMethod=fewshot 時のみ有効） */
+export const FewShotBudgetOverridesSchema = z
+  .object({
+    maxDemos: z.number().int().min(1).max(8).optional(),
+    maxRounds: z.number().int().min(1).max(10).optional(),
+    demoThreshold: z.number().min(0).max(1).optional(),
+    compileTimeoutMs: z.number().int().min(0).max(600_000).optional()
+  })
+  .optional();
+
+export type FewShotBudgetOverrides = z.infer<typeof FewShotBudgetOverridesSchema>;
+
 // Judge プロンプト改善
 export const JudgePromptImproveRequestSchema = z.object({
   domain: DomainIdSchema,
   feedbackLimit: z.number().int().min(1).max(50).optional().default(10),
+  selectedRecordIds: z.array(z.string().min(1)).optional().default([]),
   llmProvider: LLMProviderSchema.optional().default("ax"),
-  improvementMethod: ImprovementMethodSchema
+  improvementMethod: ImprovementMethodSchema,
+  gepaBudget: GepaBudgetOverridesSchema,
+  fewShotBudget: FewShotBudgetOverridesSchema,
+  logLevel: LogLevelSchema.optional()
 });
 
 export const JudgePromptImproveResponseSchema = z.object({
   suggestion: z.string(),
-  analysisSummary: z.string(),
   currentPrompt: z.string().optional(),
-  resultSource: z.enum(["gepa", "fallback", "standard"]),
-  degradedReason: z.string().optional()
+  resultSource: z.enum(["gepa", "standard"]),
+  degradedReason: z.string().optional(),
+  optimizationLog: z.array(z.string()).optional()
 });
 
 // 生成プロンプト改善
@@ -190,16 +222,20 @@ export const TargetPromptImproveRequestSchema = z.object({
   domain: DomainIdSchema,
   failedLimit: z.number().int().min(1).max(50).optional().default(10),
   minScore: z.number().int().min(0).max(5).optional(),
+  selectedRecordIds: z.array(z.string().min(1)).optional().default([]),
   llmProvider: LLMProviderSchema.optional().default("ax"),
-  improvementMethod: ImprovementMethodSchema
+  improvementMethod: ImprovementMethodSchema,
+  gepaBudget: GepaBudgetOverridesSchema,
+  fewShotBudget: FewShotBudgetOverridesSchema,
+  logLevel: LogLevelSchema.optional()
 });
 
 export const TargetPromptImproveResponseSchema = z.object({
   suggestion: z.string(),
-  analysisSummary: z.string(),
   currentPrompt: z.string().optional(),
-  resultSource: z.enum(["gepa", "fallback", "standard"]),
-  degradedReason: z.string().optional()
+  resultSource: z.enum(["gepa", "standard"]),
+  degradedReason: z.string().optional(),
+  optimizationLog: z.array(z.string()).optional()
 });
 
 // GEPA 非同期ジョブ
@@ -237,9 +273,8 @@ export const GepaJobStatusResponseSchema = z.object({
   result: z
     .object({
       suggestion: z.string(),
-      analysisSummary: z.string(),
       currentPrompt: z.string().optional(),
-      resultSource: z.enum(["gepa", "fallback", "standard"]).optional(),
+      resultSource: z.enum(["gepa", "standard"]).optional(),
       degradedReason: z.string().optional()
     })
     .optional(),

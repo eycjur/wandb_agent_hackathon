@@ -5,54 +5,59 @@ import { generateTextForPromptImprovement } from "@/lib/infrastructure/promptImp
 import { optimizeTargetPromptWithGEPA } from "@/lib/infrastructure/ax/axGepaTargetOptimizer";
 import { optimizeTargetPromptWithFewShot } from "@/lib/infrastructure/ax/axFewShotTargetOptimizer";
 import type { EvaluationLogRecord } from "@/lib/infrastructure/evaluationLogStore";
-import type { ImprovementMethodId, LLMProviderId } from "@/lib/contracts/generateEvaluate";
+import type {
+  ImprovementMethodId,
+  LLMProviderId,
+  GepaBudgetOverrides,
+  FewShotBudgetOverrides,
+  LogLevelId
+} from "@/lib/contracts/generateEvaluate";
+import {
+  withLogLevelContext,
+  getDebugLogCollector
+} from "@/lib/promptOptimizer/logLevel";
 import { getWeaveProjectId } from "@/lib/infrastructure/weave/weaveProjectId";
 import {
-  GEPA_TARGET_FAST_UI_BUDGET
+  GEPA_TARGET_FAST_UI_BUDGET,
+  mergeGepaBudgetWithOverrides
 } from "@/lib/application/promptOptimization/gepaRuntimeConfig";
 
 export interface TargetPromptImprovementResult {
   suggestion: string;
-  analysisSummary: string;
   currentPrompt?: string;
-  resultSource: "gepa" | "fallback" | "standard";
+  resultSource: "gepa" | "standard";
   degradedReason?: string;
+  /** GEPA 実行時の最適化ログ（resultSource=gepa 時のみ） */
+  optimizationLog?: string[];
 }
 
 export type TargetPromptImproveOptions = {
   llmProvider?: LLMProviderId;
   improvementMethod?: ImprovementMethodId;
+  gepaBudget?: GepaBudgetOverrides;
+  fewShotBudget?: FewShotBudgetOverrides;
+  logLevel?: LogLevelId;
 };
-
-const GEPA_RECOVERABLE_ERROR_CODES = new Set([
-  "PROVIDER_TIMEOUT",
-  "PROVIDER_ERROR",
-  "PROVIDER_RESPONSE_INVALID"
-]);
-
-function canFallbackFromGepa(error: unknown): boolean {
-  return error instanceof AppError && GEPA_RECOVERABLE_ERROR_CODES.has(error.code);
-}
 
 async function generateStandardTargetImprovement(
   failedRecords: EvaluationLogRecord[],
   promptConfig: Awaited<ReturnType<typeof getDomainPromptConfig>>,
   options: TargetPromptImproveOptions
-): Promise<Pick<TargetPromptImprovementResult, "suggestion" | "analysisSummary">> {
+): Promise<Pick<TargetPromptImprovementResult, "suggestion">> {
   const examplesText = failedRecords
     .map(
       (r, i) =>
         `【例${i + 1}】
 - 職務経歴入力: ${r.userInput.slice(0, 200)}${r.userInput.length > 200 ? "..." : ""}
 - 生成出力: ${r.generatedOutput.slice(0, 300)}${r.generatedOutput.length > 300 ? "..." : ""}
-- Judge 評価: スコア ${r.judgeResult.score}/${r.judgeResult.passThreshold}, 不合格
+- Judge 評価: スコア ${r.judgeResult.score}/${r.judgeResult.passThreshold}, 判定 ${r.judgeResult.pass ? "合格" : "不合格"}
 - 理由: ${r.judgeResult.reason}`
     )
     .join("\n\n");
 
   const prompt = `あなたは LLM の生成プロンプトを改善する専門家です。
 
-以下の「現在の生成プロンプト」と「Judge で不合格・低評価だったケース」を分析し、
+以下の「現在の生成プロンプト」と「Judge 評価ログ」を分析し、
 生成品質を向上させるための改善案を提案してください。
 
 ## 現在の生成プロンプト（target.instruction_template）
@@ -63,7 +68,7 @@ ${promptConfig.targetInstruction}
 
 ${promptConfig.judgeRubric.map((r) => `- ${r}`).join("\n")}
 
-## 不合格・低評価だったケース
+## Judge 評価ログ
 
 ${examplesText}
 
@@ -82,17 +87,14 @@ ${examplesText}
     improvementMethod: options.improvementMethod
   });
 
-  const analysisMatch = rawResponse.match(/【分析サマリー】\s*([\s\S]*?)(?=【改善案】|$)/);
   const suggestionMatch = rawResponse.match(/【改善案】\s*([\s\S]*?)$/);
-
-  const analysisSummary = analysisMatch?.[1]?.trim() ?? "分析結果を抽出できませんでした";
   const suggestion = suggestionMatch?.[1]?.trim() ?? rawResponse;
 
-  return { suggestion, analysisSummary };
+  return { suggestion };
 }
 
 /**
- * 不合格・低スコアの評価結果を分析し、生成プロンプトの改善案を LLM で生成する
+ * Judge の評価結果を分析し、生成プロンプトの改善案を LLM で生成する
  */
 export async function generateTargetPromptImprovement(
   failedRecords: EvaluationLogRecord[],
@@ -102,46 +104,53 @@ export async function generateTargetPromptImprovement(
   if (failedRecords.length === 0) {
     return {
       suggestion:
-        "不合格・低スコアの評価データがありません。生成・評価を実行してから再度お試しください。",
-      analysisSummary: "分析対象なし",
+        "評価データがありません。生成・評価を実行してから再度お試しください。",
       currentPrompt: undefined,
       resultSource: "standard"
     };
   }
   const promptConfig = await getDomainPromptConfig(domain);
 
+  const runWithLogLevel = async <T extends { optimizationLog?: string[] }>(
+    fn: () => Promise<T>
+  ): Promise<T> => {
+    if (!options.logLevel) return fn();
+    return withLogLevelContext(options.logLevel, async () => {
+      const result = await fn();
+      const debugLogs = getDebugLogCollector();
+      if (debugLogs?.length && options.logLevel === "debug") {
+        const base = result?.optimizationLog ?? [];
+        return {
+          ...result,
+          optimizationLog: [...base, "", "[debug] LLM calls:", ...debugLogs]
+        } as T;
+      }
+      return result;
+    });
+  };
+
   if (options.llmProvider === "ax" && options.improvementMethod === "gepa") {
-    try {
-      const gepaResult = await optimizeTargetPromptWithGEPA(
-        failedRecords,
-        domain,
-        GEPA_TARGET_FAST_UI_BUDGET
-      );
-      return {
-        ...gepaResult,
-        currentPrompt: promptConfig.targetInstruction,
-        resultSource: "gepa"
-      };
-    } catch (error) {
-      if (!canFallbackFromGepa(error)) {
-        throw error;
-      }
-      if (error instanceof AppError) {
-        throw error;
-      }
-      throw new AppError(
-        502,
-        "PROVIDER_ERROR",
-        "GEPA 最適化に失敗しました。",
-        error instanceof Error ? error.message : "GEPA failed."
-      );
-    }
+    const budget = mergeGepaBudgetWithOverrides(
+      GEPA_TARGET_FAST_UI_BUDGET,
+      options.gepaBudget
+    );
+    const gepaResult = await runWithLogLevel(() =>
+      optimizeTargetPromptWithGEPA(failedRecords, domain, budget)
+    );
+    return {
+      ...gepaResult,
+      currentPrompt: promptConfig.targetInstruction,
+      resultSource: "gepa"
+    };
   }
 
   if (options.llmProvider === "ax" && options.improvementMethod === "fewshot") {
-    const fewShotResult = await optimizeTargetPromptWithFewShot(
-      failedRecords,
-      domain
+    const fewShotResult = await runWithLogLevel(() =>
+      optimizeTargetPromptWithFewShot(
+        failedRecords,
+        domain,
+        options.fewShotBudget
+      )
     );
     return {
       ...fewShotResult,
@@ -173,11 +182,9 @@ export async function generateTargetPromptImprovement(
       llmProvider: "gemini",
       improvementMethod: "meta"
     });
-    const analysisMatch = rawResponse.match(/【分析サマリー】\s*([\s\S]*?)(?=【改善案】|$)/);
     const suggestionMatch = rawResponse.match(/【改善案】\s*([\s\S]*?)$/);
     return {
       suggestion: suggestionMatch?.[1]?.trim() ?? rawResponse,
-      analysisSummary: analysisMatch?.[1]?.trim() ?? "分析結果を抽出できませんでした",
       currentPrompt: promptConfig.targetInstruction,
       resultSource: "standard"
     };
@@ -209,7 +216,7 @@ W&B プロジェクト: **${projectId}**
 1. \`query_weave_traces_tool\` を使い、まず op_name が "judge_log" / "human_feedback_log" / "feedback" / "generate_evaluate" に関連する最新トレースを最大100件取得する（domain 条件は最初に固定しない）。
 2. 取得したトレースの構造を確認し、domain が \`inputs.arg0.domain\` / \`inputs.domain\` / \`attributes.domain\` のどこに入っているかを特定する。
 3. 手順2で特定したキーを使って domain="${domain}" のデータだけを抽出する。0件の場合は、domain フィールド欠損としてその旨を分析サマリーに明記する。
-4. 不合格ケース（pass=false）や低スコアケースを優先して抽出し、失敗要因を分類する。
+4. 評価ログを抽出し、課題パターンを分類する。
 5. 失敗要因ごとに、現在の生成プロンプトで不足している指示（構造、具体性、網羅性、根拠提示など）を特定する。
 6. 改善案を3つ作成し、抽出ケースへの適合性を比較して最も有効な案を1つ選ぶ。
 

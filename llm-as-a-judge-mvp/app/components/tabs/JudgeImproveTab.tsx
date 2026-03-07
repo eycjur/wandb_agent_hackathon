@@ -6,13 +6,20 @@ import type { ImprovementMethodId } from "@/lib/contracts/generateEvaluate";
 import { ProgressPanel, COMMON_PROGRESS_STEPS } from "@/app/components/ProgressPanel";
 import { PromptDiffView } from "@/app/components/PromptDiffView";
 import { ExpandableTextCell } from "@/app/components/ExpandableTextCell";
+import {
+  HelpTooltip,
+  GEPA_PARAM_TOOLTIPS,
+  FEWSHOT_PARAM_TOOLTIPS,
+  LOG_LEVEL_TOOLTIP
+} from "@/app/components/HelpTooltip";
+import type { LogLevelId } from "@/lib/contracts/generateEvaluate";
 
 type ImprovementResult = {
   suggestion: string;
-  analysisSummary: string;
   currentPrompt?: string;
-  resultSource: "gepa" | "fallback" | "standard";
+  resultSource: "gepa" | "standard";
   degradedReason?: string;
+  optimizationLog?: string[];
 };
 
 type Props = {
@@ -44,6 +51,17 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
   const [wandbConfigured, setWandbConfigured] = useState(false);
   const [weaveData, setWeaveData] = useState<WeaveHumanFeedbackRecord[] | null>(null);
   const [weaveDataLoading, setWeaveDataLoading] = useState(false);
+  const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+  const [gepaMaxIterations, setGepaMaxIterations] = useState(2);
+  const [gepaNumTrials, setGepaNumTrials] = useState(3);
+  const [gepaEarlyStoppingTrials, setGepaEarlyStoppingTrials] = useState(1);
+  const [gepaTimeoutSeconds, setGepaTimeoutSeconds] = useState(0);
+  const [gepaMaxExamples, setGepaMaxExamples] = useState(6);
+  const [fewShotMaxDemos, setFewShotMaxDemos] = useState(3);
+  const [fewShotMaxRounds, setFewShotMaxRounds] = useState(2);
+  const [fewShotDemoThreshold, setFewShotDemoThreshold] = useState(0.5);
+  const [fewShotTimeoutSeconds, setFewShotTimeoutSeconds] = useState(0);
+  const [logLevel, setLogLevel] = useState<LogLevelId | "">("");
   const improvementMethodDescription =
     improvementMethod === "meta"
       ? "LLMで改善プロンプトを作成します。"
@@ -62,7 +80,9 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
         throw new Error(data?.error?.message ?? "Weave からの取得に失敗しました");
       }
       const data = await res.json();
-      setWeaveData(data.records ?? []);
+      const records = (data.records ?? []) as WeaveHumanFeedbackRecord[];
+      setWeaveData(records);
+      setSelectedRecordIds(records.map((r) => r.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Weave からの取得に失敗しました");
     } finally {
@@ -108,24 +128,52 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
         body: JSON.stringify({
           domain: selectedDomain,
           feedbackLimit: 10,
+          selectedRecordIds,
           llmProvider: "ax",
-          improvementMethod
+          improvementMethod,
+          ...(improvementMethod === "gepa" && {
+            gepaBudget: {
+              maxIterations: gepaMaxIterations,
+              numTrials: gepaNumTrials,
+              earlyStoppingTrials: gepaEarlyStoppingTrials,
+              maxExamples: gepaMaxExamples,
+              ...(gepaTimeoutSeconds > 0 && {
+                compileTimeoutMs: gepaTimeoutSeconds * 1000
+              })
+            }
+          }),
+          ...(improvementMethod === "fewshot" && {
+            fewShotBudget: {
+              maxDemos: fewShotMaxDemos,
+              maxRounds: fewShotMaxRounds,
+              demoThreshold: fewShotDemoThreshold,
+              ...(fewShotTimeoutSeconds > 0 && {
+                compileTimeoutMs: fewShotTimeoutSeconds * 1000
+              })
+            }
+          }),
+          ...(logLevel !== "" && { logLevel })
         })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data?.error?.message ?? "改善案の生成に失敗しました");
+        const msg =
+          (data as { error?: { message?: string } })?.error?.message ??
+          `改善案の生成に失敗しました（${res.status}）`;
+        throw new Error(msg);
       }
       setImprovement({
         suggestion: data.suggestion,
-        analysisSummary: data.analysisSummary,
         currentPrompt: data.currentPrompt,
         resultSource: data.resultSource,
-        degradedReason: data.degradedReason
+        degradedReason: data.degradedReason,
+        optimizationLog: data.optimizationLog
       });
       onImprovementGenerated?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "改善案の生成に失敗しました");
+      const msg =
+        e instanceof Error ? e.message : "改善案の生成に失敗しました";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -146,13 +194,18 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
           promptContent: improvement.suggestion
         })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data?.error?.message ?? "Weave への反映に失敗しました");
+        const msg =
+          (data as { error?: { message?: string } })?.error?.message ??
+          `Weave への反映に失敗しました（${res.status}）`;
+        throw new Error(msg);
       }
-      setPublishMessage(data.message ?? "Weave に反映しました");
+      setPublishMessage((data as { message?: string })?.message ?? "Weave に反映しました");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Weave への反映に失敗しました");
+      const msg =
+        e instanceof Error ? e.message : "Weave への反映に失敗しました";
+      setError(msg);
     } finally {
       setPublishLoading(false);
     }
@@ -170,13 +223,11 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
     if (improvement?.resultSource === "gepa") {
       return "GEPA 最適化結果を取得しました。Weave に反映するか、コピーしてご利用ください。";
     }
-    if (improvement?.resultSource === "fallback") {
-      return "GEPA が失敗したため、通常生成で改善案を返しました。";
-    }
     if (improvement) return "改善案が生成されました。Weave に反映するか、コピーしてご利用ください。";
     if (weaveData === null) return "まず「Weave からデータを取得」を押してデータを取得してください。";
+    if (selectedRecordIds.length === 0) return "利用データを1件以上選択してください。";
     if (weaveData.length === 0) return "取得したデータがありません。手動評価を蓄積してから再度取得してください。";
-    return "データを取得しました。「改善案を生成」を押して Judge プロンプトの改善案を生成します。";
+    return `データを取得しました（選択 ${selectedRecordIds.length}/${weaveData.length} 件）。「改善案を生成」を押してください。`;
   };
 
   return (
@@ -200,12 +251,14 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
           type="button"
           className="primaryButton"
           onClick={handleGenerate}
-          disabled={loading || !wandbConfigured || weaveData === null}
+          disabled={loading || !wandbConfigured || weaveData === null || selectedRecordIds.length === 0}
           title={
             !wandbConfigured
               ? "まず W&B を設定してください"
               : weaveData === null
                 ? "まず「Weave からデータを取得」を実行してください"
+                : selectedRecordIds.length === 0
+                  ? "利用データを1件以上選択してください"
                 : undefined
           }
         >
@@ -222,6 +275,22 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
       {weaveData !== null && (
         <div className="weaveDataPanel" style={{ marginTop: 16 }}>
           <h3>Weave から取得したデータ（{weaveData.length} 件）</h3>
+          {weaveData.length > 0 && (
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+              <input
+                type="checkbox"
+                checked={selectedRecordIds.length === weaveData.length}
+                onChange={(event) => {
+                  if (event.target.checked) {
+                    setSelectedRecordIds(weaveData.map((r) => r.id));
+                  } else {
+                    setSelectedRecordIds([]);
+                  }
+                }}
+              />
+              全件選択（{selectedRecordIds.length}/{weaveData.length}）
+            </label>
+          )}
           {weaveData.length === 0 ? (
             <p className="hintText">
               データがありません。
@@ -234,6 +303,7 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
               <table className="weaveDataTable" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
                 <thead>
                   <tr style={{ borderBottom: "2px solid var(--border)", textAlign: "left" }}>
+                    <th style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>利用</th>
                     <th style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>日時</th>
                     <th style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>ドメイン</th>
                     <th style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>人間</th>
@@ -245,6 +315,21 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
                 <tbody>
                   {weaveData.map((r) => (
                     <tr key={r.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                      <td style={{ padding: "8px 12px" }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedRecordIds.includes(r.id)}
+                          onChange={(event) => {
+                            setSelectedRecordIds((prev) => {
+                              if (event.target.checked) {
+                                if (prev.includes(r.id)) return prev;
+                                return [...prev, r.id];
+                              }
+                              return prev.filter((id) => id !== r.id);
+                            });
+                          }}
+                        />
+                      </td>
                       <td style={{ padding: "8px 12px", whiteSpace: "nowrap", color: "var(--text-muted)" }}>
                         {new Date(r.createdAt).toLocaleString("ja-JP")}
                       </td>
@@ -276,14 +361,6 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
 
       {improvement && (
         <div className="improvementResult">
-          {improvement.resultSource === "fallback" && (
-            <p className="hintText" style={{ marginBottom: 8 }}>
-              GEPA 実行に失敗したためフォールバック結果を表示しています。
-              {improvement.degradedReason ? ` (${improvement.degradedReason})` : ""}
-            </p>
-          )}
-          <h3>分析サマリー</h3>
-          <p>{improvement.analysisSummary}</p>
           {improvement.currentPrompt != null && improvement.currentPrompt !== "" ? (
             <>
               <h3>前後比較</h3>
@@ -334,6 +411,30 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
               )}
             </>
           )}
+          {improvement.optimizationLog != null &&
+            improvement.optimizationLog.length > 0 && (
+              <details className="optimizationLogDetails" style={{ marginTop: 16 }}>
+                <summary style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  改善ログ（{improvement.optimizationLog.length} 件）
+                  <button
+                    type="button"
+                    className="subtleButton"
+                    style={{ fontSize: "0.78rem", padding: "4px 8px" }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const text = improvement.optimizationLog!.join("\n");
+                      void navigator.clipboard.writeText(text);
+                    }}
+                  >
+                    コピー
+                  </button>
+                </summary>
+                <pre className="optimizationLogContent">
+                  {improvement.optimizationLog.join("\n")}
+                </pre>
+              </details>
+            )}
         </div>
       )}
 
@@ -379,6 +480,185 @@ export function JudgeImproveTab({ selectedDomain, completedStepIndices, onImprov
             {improvementMethodDescription}
           </p>
         </div>
+        <div className="logLevelParams" style={{ marginTop: 16 }}>
+          <h4 style={{ marginBottom: 8, fontSize: "0.9rem" }}>ログレベル</h4>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ minWidth: 140 }}>
+              レベル:
+              <HelpTooltip text={LOG_LEVEL_TOOLTIP} />
+            </span>
+            <select
+              value={logLevel}
+              onChange={(e) =>
+                setLogLevel((e.target.value || "") as LogLevelId | "")
+              }
+              style={{ minWidth: 120 }}
+            >
+              <option value="">未指定</option>
+              <option value="off">off</option>
+              <option value="error">error</option>
+              <option value="info">info</option>
+              <option value="debug">debug</option>
+            </select>
+          </label>
+        </div>
+        {improvementMethod === "fewshot" && (
+          <div className="fewShotParams" style={{ marginTop: 16 }}>
+            <h4 style={{ marginBottom: 8, fontSize: "0.9rem" }}>Few-shot パラメータ</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ minWidth: 140 }}>
+                  maxDemos:
+                  <HelpTooltip text={FEWSHOT_PARAM_TOOLTIPS.maxDemos} />
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={8}
+                  value={fewShotMaxDemos}
+                  onChange={(e) =>
+                    setFewShotMaxDemos(Math.min(8, Math.max(1, Number(e.target.value) || 3)))
+                  }
+                  style={{ width: 60 }}
+                />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ minWidth: 140 }}>
+                  maxRounds:
+                  <HelpTooltip text={FEWSHOT_PARAM_TOOLTIPS.maxRounds} />
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={fewShotMaxRounds}
+                  onChange={(e) =>
+                    setFewShotMaxRounds(Math.min(10, Math.max(1, Number(e.target.value) || 2)))
+                  }
+                  style={{ width: 60 }}
+                />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ minWidth: 140 }}>
+                  demoThreshold:
+                  <HelpTooltip text={FEWSHOT_PARAM_TOOLTIPS.demoThreshold} />
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  value={fewShotDemoThreshold}
+                  onChange={(e) =>
+                    setFewShotDemoThreshold(
+                      Math.min(1, Math.max(0, Number(e.target.value) || 0.5))
+                    )
+                  }
+                  style={{ width: 60 }}
+                />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ minWidth: 140 }}>
+                  timeout:
+                  <HelpTooltip text={FEWSHOT_PARAM_TOOLTIPS.compileTimeoutSeconds} />
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  max={600}
+                  value={fewShotTimeoutSeconds}
+                  onChange={(e) =>
+                    setFewShotTimeoutSeconds(Math.max(0, Number(e.target.value) || 0))
+                  }
+                  style={{ width: 60 }}
+                />
+              </label>
+            </div>
+          </div>
+        )}
+        {improvementMethod === "gepa" && (
+          <div className="gepaParams" style={{ marginTop: 16 }}>
+            <h4 style={{ marginBottom: 8, fontSize: "0.9rem" }}>GEPA パラメータ</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ minWidth: 140 }}>
+                  maxIterations:
+                  <HelpTooltip text={GEPA_PARAM_TOOLTIPS.maxIterations} />
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={gepaMaxIterations}
+                  onChange={(e) => setGepaMaxIterations(Number(e.target.value) || 2)}
+                  style={{ width: 60 }}
+                />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ minWidth: 140 }}>
+                  numTrials:
+                  <HelpTooltip text={GEPA_PARAM_TOOLTIPS.numTrials} />
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={gepaNumTrials}
+                  onChange={(e) => setGepaNumTrials(Number(e.target.value) || 3)}
+                  style={{ width: 60 }}
+                />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ minWidth: 140 }}>
+                  earlyStoppingTrials:
+                  <HelpTooltip text={GEPA_PARAM_TOOLTIPS.earlyStoppingTrials} />
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={gepaEarlyStoppingTrials}
+                  onChange={(e) =>
+                    setGepaEarlyStoppingTrials(Number(e.target.value) || 1)
+                  }
+                  style={{ width: 60 }}
+                />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ minWidth: 140 }}>
+                  maxExamples:
+                  <HelpTooltip text={GEPA_PARAM_TOOLTIPS.maxExamples} />
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={gepaMaxExamples}
+                  onChange={(e) =>
+                    setGepaMaxExamples(Math.min(50, Math.max(1, Number(e.target.value) || 6)))
+                  }
+                  style={{ width: 60 }}
+                />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ minWidth: 140 }}>
+                  timeout:
+                  <HelpTooltip text={GEPA_PARAM_TOOLTIPS.compileTimeoutSeconds} />
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  max={600}
+                  value={gepaTimeoutSeconds}
+                  onChange={(e) =>
+                    setGepaTimeoutSeconds(Math.max(0, Number(e.target.value) || 0))
+                  }
+                  style={{ width: 60 }}
+                />
+              </label>
+            </div>
+          </div>
+        )}
       </aside>
     </div>
   );
