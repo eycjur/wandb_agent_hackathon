@@ -19,6 +19,13 @@ export type ImprovementMethodId = z.infer<typeof ImprovementMethodSchema>;
 export const LogLevelSchema = z.enum(["off", "error", "info", "debug"]);
 export type LogLevelId = z.infer<typeof LogLevelSchema>;
 
+export const EvaluationSourceTypeSchema = z.enum([
+  "generated",
+  "generated_edited",
+  "manual"
+]);
+export type EvaluationSourceType = z.infer<typeof EvaluationSourceTypeSchema>;
+
 export const ErrorCodeSchema = z.enum([
   "INVALID_JSON",
   "VALIDATION_ERROR",
@@ -76,6 +83,7 @@ export const JudgeRequestSchema = z.object({
       `生成出力は${MAX_GENERATED_OUTPUT_CHARS}文字以内で入力してください。`
     ),
   domain: DomainIdSchema.optional().default("resume_summary"),
+  sourceType: EvaluationSourceTypeSchema.optional().default("generated"),
   llmProvider: LLMProviderSchema.optional().default("ax"),
   improvementMethod: ImprovementMethodSchema.optional().default("meta")
 });
@@ -132,6 +140,7 @@ export const HumanFeedbackRequestSchema = z.object({
   domain: DomainIdSchema,
   userInput: z.string().min(1),
   generatedOutput: z.string().min(1),
+  sourceType: EvaluationSourceTypeSchema.optional().default("generated"),
   judgeResult: z
     .object({
       score: z.number().int().min(0).max(5),
@@ -148,6 +157,7 @@ export const HumanFeedbackRecordSchema = z.object({
   domain: DomainIdSchema,
   userInput: z.string(),
   generatedOutput: z.string(),
+  sourceType: EvaluationSourceTypeSchema,
   judgeResult: z
     .object({
       score: z.number(),
@@ -295,6 +305,7 @@ export type GenerateRequest = z.infer<typeof GenerateRequestSchema>;
 export type GenerateSuccessResponse = z.infer<typeof GenerateSuccessResponseSchema>;
 export type JudgeRequest = z.infer<typeof JudgeRequestSchema>;
 export type JudgeSuccessResponse = z.infer<typeof JudgeSuccessResponseSchema>;
+export type EvaluationSourceTypeId = z.infer<typeof EvaluationSourceTypeSchema>;
 export type GenerateEvaluateErrorResponse = z.infer<
   typeof GenerateEvaluateErrorResponseSchema
 >;

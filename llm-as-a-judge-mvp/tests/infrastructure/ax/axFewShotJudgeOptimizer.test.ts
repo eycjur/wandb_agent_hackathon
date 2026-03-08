@@ -59,6 +59,7 @@ describe("optimizeJudgePromptWithFewShot", () => {
         domain: "resume_summary",
         userInput: "input A",
         generatedOutput: "output A",
+        sourceType: "generated",
         judgeResult: { score: 4, reason: "ok", pass: true },
         humanScore: 4,
         humanComment: "良い",
@@ -99,6 +100,7 @@ describe("optimizeJudgePromptWithFewShot", () => {
         domain: "resume_summary",
         userInput: "input A",
         generatedOutput: "output A",
+        sourceType: "generated",
         judgeResult: { score: 1, reason: "bad", pass: false },
         humanScore: 1,
         createdAt: "2026-03-02T00:00:00.000Z"
@@ -145,6 +147,7 @@ describe("optimizeJudgePromptWithFewShot", () => {
         domain: "resume_summary",
         userInput: "input A",
         generatedOutput: "output A",
+        sourceType: "generated",
         humanScore: 3,
         createdAt: "2026-03-02T00:00:00.000Z"
       }

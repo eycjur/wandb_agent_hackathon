@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
-import type { ImprovementMethodId } from "@/lib/contracts/generateEvaluate";
+import type {
+  EvaluationSourceTypeId,
+  ImprovementMethodId
+} from "@/lib/contracts/generateEvaluate";
 import { ProgressPanel, COMMON_PROGRESS_STEPS } from "@/app/components/ProgressPanel";
 import { ExpandableTextCell } from "@/app/components/ExpandableTextCell";
 import { PromptDiffView } from "@/app/components/PromptDiffView";
@@ -39,12 +42,13 @@ type WeaveJudgeLogRecord = {
   rubricVersion: number;
   userInput?: string;
   generatedOutput?: string;
+  sourceType?: EvaluationSourceTypeId;
   reason?: string;
   createdAt: string;
 };
 
 function isTargetImproveCandidate(record: WeaveJudgeLogRecord): boolean {
-  return Boolean(record.id);
+  return Boolean(record.id) && (record.sourceType ?? "generated") === "generated";
 }
 
 export function TargetImproveTab({ selectedDomain, completedStepIndices, onImprovementGenerated }: Props) {

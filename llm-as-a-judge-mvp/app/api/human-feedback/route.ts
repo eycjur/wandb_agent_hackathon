@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       domain: parsed.data.domain,
       userInput: parsed.data.userInput,
       generatedOutput: parsed.data.generatedOutput,
+      sourceType: parsed.data.sourceType,
       judgeResult: parsed.data.judgeResult,
       humanScore: parsed.data.humanScore,
       humanComment: parsed.data.humanComment

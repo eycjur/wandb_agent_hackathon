@@ -77,7 +77,8 @@ describe("POST /api/judge", () => {
       },
       body: JSON.stringify({
         userInput: "resume text",
-        generatedOutput: "summary"
+        generatedOutput: "summary",
+        sourceType: "manual"
       })
     });
 
@@ -91,6 +92,11 @@ describe("POST /api/judge", () => {
     expect(body.score).toBe(5);
     expect(body.pass).toBe(true);
     expect(body.reason).toBe("good");
+    expect(provider.judgeOutput).toHaveBeenCalledWith(
+      "resume text",
+      "summary",
+      "resume_summary"
+    );
   });
 
   it("プロバイダーエラーはAppErrorを返す", async () => {

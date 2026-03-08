@@ -1,11 +1,12 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { MAX_USER_INPUT_CHARS } from "@/lib/config/app";
 import { JUDGE_MODEL, TARGET_MODEL } from "@/lib/config/llm";
 import type { DomainId } from "@/lib/config/domainPromptLoader";
+import type { EvaluationResult } from "@/lib/ui/evaluation";
 import {
+  shouldSyncEvaluationDraftWithGenerated,
   selectDomainSession,
   type DomainSessionState,
   type ProgressStage
@@ -13,23 +14,10 @@ import {
 import { ProgressPanel, COMMON_PROGRESS_STEPS } from "@/app/components/ProgressPanel";
 import type {
   DomainConfigResponse,
-  DomainsListResponse,
   ErrorCode,
   GenerateEvaluateErrorResponse,
   GenerateSuccessResponse
 } from "@/lib/contracts/generateEvaluate";
-
-type EvaluationResult = {
-  domain: DomainId;
-  rubricVersion: number;
-  passThreshold: number;
-  pass: boolean;
-  userInput: string;
-  generatedOutput: string;
-  score: number;
-  reason: string;
-  createdAt: string;
-};
 
 const DOMAIN_LABELS: Record<DomainId, string> = {
   resume_summary: "職務要約",
@@ -50,15 +38,6 @@ const DOMAIN_OUTPUT_LABELS: Record<DomainId, string> = {
 };
 
 const VALID_DOMAINS = ["resume_summary", "resume_detail", "self_pr"] as const;
-
-function isDomainsListResponse(data: unknown): data is DomainsListResponse {
-  if (typeof data !== "object" || data === null || !("domains" in data)) return false;
-  const domains = (data as DomainsListResponse).domains;
-  return Array.isArray(domains) && domains.every(
-    (d) => typeof d === "object" && d !== null && "id" in d && "label" in d &&
-      VALID_DOMAINS.includes(d.id as (typeof VALID_DOMAINS)[number])
-  );
-}
 
 function isDomainConfigResponse(data: unknown): data is DomainConfigResponse {
   if (typeof data !== "object" || data === null) return false;
@@ -134,6 +113,15 @@ export function GenerateTab({ selectedDomain, domainSessions, onPatchDomainSessi
   }, [session.progressStage, session.requestError]);
 
   useEffect(() => {
+    if (!loading) return;
+    const startedAt = Date.now();
+    const intervalId = setInterval(() => {
+      setElapsedMs(Date.now() - startedAt);
+    }, 200);
+    return () => clearInterval(intervalId);
+  }, [loading]);
+
+  useEffect(() => {
     const load = async () => {
       try {
         const res = await fetch(`/api/domain-config?domain=${encodeURIComponent(selectedDomain)}`, { cache: "no-store" });
@@ -180,14 +168,31 @@ export function GenerateTab({ selectedDomain, domainSessions, onPatchDomainSessi
       }
       if (!isGenerateSuccessResponse(generateData)) throw new Error("サーバー応答形式が不正です。");
 
-      const previousForDomain = domainSessions[domainToUse].currentResult ?? domainSessions[domainToUse].previousResult;
+      const generatedText = (generateData as GenerateSuccessResponse).generatedOutput;
+      const currentSession = domainSessions[domainToUse];
+      const previousForDomain =
+        currentSession.currentResult ?? currentSession.previousResult;
+      const shouldSyncDraft = shouldSyncEvaluationDraftWithGenerated(
+        currentSession
+      );
       setProgressStage("generated");
       onPatchDomainSession(domainToUse, {
-        generatedOutput: (generateData as GenerateSuccessResponse).generatedOutput,
+        generatedOutput: generatedText,
         generatedForInput: normalizedInput,
         lastGeneratedInput: normalizedInput,
         currentResult: null,
         previousResult: previousForDomain,
+        ...(shouldSyncDraft
+          ? {
+              evaluationDraftUserInput: normalizedInput,
+              evaluationDraftOutput: generatedText,
+              evaluationDraftSeedUserInput: normalizedInput,
+              evaluationDraftSeedOutput: generatedText,
+              hasPendingGeneratedDraft: false
+            }
+          : {
+              hasPendingGeneratedDraft: true
+            }),
         progressStage: "generated",
         requestError: ""
       });

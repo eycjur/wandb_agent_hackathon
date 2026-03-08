@@ -25,6 +25,7 @@ describe("POST /api/target-prompt/improve", () => {
         domain: "resume_summary",
         userInput: "input",
         generatedOutput: "output",
+        sourceType: "generated",
         judgeResult: {
           score: 2,
           reason: "要約が不十分",
@@ -110,6 +111,7 @@ describe("POST /api/target-prompt/improve", () => {
         domain: "resume_summary",
         userInput: "input1",
         generatedOutput: "output1",
+        sourceType: "generated",
         judgeResult: {
           score: 2,
           reason: "r1",
@@ -124,6 +126,7 @@ describe("POST /api/target-prompt/improve", () => {
         domain: "resume_summary",
         userInput: "input2",
         generatedOutput: "output2",
+        sourceType: "generated",
         judgeResult: {
           score: 4,
           reason: "r2",

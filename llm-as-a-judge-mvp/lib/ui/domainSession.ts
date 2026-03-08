@@ -1,4 +1,5 @@
 import type { DomainId } from "@/lib/config/domainPromptLoader";
+import type { EvaluationSourceType } from "@/lib/contracts/generateEvaluate";
 
 export type ProgressStage =
   | "idle"
@@ -14,6 +15,11 @@ export type DomainSessionState<TResult> = {
   generatedOutput: string;
   generatedForInput: string;
   lastGeneratedInput: string;
+  evaluationDraftUserInput: string;
+  evaluationDraftOutput: string;
+  evaluationDraftSeedUserInput: string;
+  evaluationDraftSeedOutput: string;
+  hasPendingGeneratedDraft: boolean;
   currentResult: TResult | null;
   previousResult: TResult | null;
   progressStage: ProgressStage;
@@ -25,6 +31,11 @@ export function createDomainSessionState<TResult>(): DomainSessionState<TResult>
     generatedOutput: "",
     generatedForInput: "",
     lastGeneratedInput: "",
+    evaluationDraftUserInput: "",
+    evaluationDraftOutput: "",
+    evaluationDraftSeedUserInput: "",
+    evaluationDraftSeedOutput: "",
+    hasPendingGeneratedDraft: false,
     currentResult: null,
     previousResult: null,
     progressStage: "idle",
@@ -59,4 +70,52 @@ export function selectDomainSession<TResult>(
   domain: DomainId
 ): DomainSessionState<TResult> {
   return sessions[domain];
+}
+
+function normalizeDraftValue(value: string): string {
+  return value.trim();
+}
+
+export function isEvaluationDraftEmpty<TResult>(
+  session: DomainSessionState<TResult>
+): boolean {
+  return (
+    normalizeDraftValue(session.evaluationDraftUserInput).length === 0 &&
+    normalizeDraftValue(session.evaluationDraftOutput).length === 0
+  );
+}
+
+export function isEvaluationDraftSyncedWithSeed<TResult>(
+  session: DomainSessionState<TResult>
+): boolean {
+  return (
+    normalizeDraftValue(session.evaluationDraftUserInput) ===
+      normalizeDraftValue(session.evaluationDraftSeedUserInput) &&
+    normalizeDraftValue(session.evaluationDraftOutput) ===
+      normalizeDraftValue(session.evaluationDraftSeedOutput)
+  );
+}
+
+export function shouldSyncEvaluationDraftWithGenerated<TResult>(
+  session: DomainSessionState<TResult>
+): boolean {
+  return (
+    isEvaluationDraftEmpty(session) || isEvaluationDraftSyncedWithSeed(session)
+  );
+}
+
+export function deriveEvaluationSourceType<TResult>(
+  session: DomainSessionState<TResult>
+): EvaluationSourceType {
+  const hasGeneratedSeed =
+    normalizeDraftValue(session.evaluationDraftSeedUserInput).length > 0 ||
+    normalizeDraftValue(session.evaluationDraftSeedOutput).length > 0;
+
+  if (!hasGeneratedSeed) {
+    return "manual";
+  }
+
+  return isEvaluationDraftSyncedWithSeed(session)
+    ? "generated"
+    : "generated_edited";
 }

@@ -1,4 +1,5 @@
 import type { DomainId } from "@/lib/config/domainPromptLoader";
+import type { EvaluationSourceType } from "@/lib/contracts/generateEvaluate";
 import {
   listHumanFeedback,
   type HumanFeedbackRecord
@@ -23,6 +24,16 @@ export function normalizeDomainId(domain: string): DomainId {
     : "resume_summary";
 }
 
+function normalizeSourceType(
+  sourceType?: EvaluationSourceType
+): EvaluationSourceType {
+  return sourceType ?? "generated";
+}
+
+function isTargetOptimizationEligible(record: Pick<EvaluationLogRecord, "sourceType">): boolean {
+  return normalizeSourceType(record.sourceType) === "generated";
+}
+
 export function toHumanFeedbackRecordFromWeave(
   record: HumanFeedbackFromWeave
 ): HumanFeedbackRecord {
@@ -31,6 +42,7 @@ export function toHumanFeedbackRecordFromWeave(
     domain: normalizeDomainId(record.domain),
     userInput: record.userInput ?? "",
     generatedOutput: record.generatedOutput ?? "",
+    sourceType: normalizeSourceType(record.sourceType),
     judgeResult:
       record.judgeResult ??
       (record.judgeScore != null
@@ -50,6 +62,7 @@ export function toEvaluationLogRecordFromWeave(
     domain: normalizeDomainId(record.domain),
     userInput: record.userInput ?? "",
     generatedOutput: record.generatedOutput ?? "",
+    sourceType: normalizeSourceType(record.sourceType),
     judgeResult: {
       score: record.score,
       reason: record.reason ?? "",
@@ -95,6 +108,7 @@ export async function loadTargetFailuresForPromptOptimization(
       });
       return fromWeave
         .map(toEvaluationLogRecordFromWeave)
+        .filter(isTargetOptimizationEligible)
         .slice(0, failedLimit);
     } catch {
       // fall through to in-memory store only when Weave request itself fails
@@ -105,7 +119,9 @@ export async function loadTargetFailuresForPromptOptimization(
     domain,
     limit: Math.max(failedLimit * 3, failedLimit)
   });
-  return records.slice(0, failedLimit);
+  return records
+    .filter(isTargetOptimizationEligible)
+    .slice(0, failedLimit);
 }
 
 export async function loadTargetExamplesForFewShot(
@@ -120,7 +136,12 @@ export async function loadTargetExamplesForFewShot(
       });
       return fromWeave
         .map(toEvaluationLogRecordFromWeave)
-        .filter((r) => r.userInput.trim().length > 0 && r.generatedOutput.trim().length > 0)
+        .filter(
+          (r) =>
+            isTargetOptimizationEligible(r) &&
+            r.userInput.trim().length > 0 &&
+            r.generatedOutput.trim().length > 0
+        )
         .sort((a, b) => {
           if (b.judgeResult.score !== a.judgeResult.score) {
             return b.judgeResult.score - a.judgeResult.score;
@@ -138,7 +159,12 @@ export async function loadTargetExamplesForFewShot(
     limit: Math.max(limit * 3, limit)
   });
   return records
-    .filter((r) => r.userInput.trim().length > 0 && r.generatedOutput.trim().length > 0)
+    .filter(
+      (r) =>
+        isTargetOptimizationEligible(r) &&
+        r.userInput.trim().length > 0 &&
+        r.generatedOutput.trim().length > 0
+    )
     .sort((a, b) => {
       if (b.judgeResult.score !== a.judgeResult.score) {
         return b.judgeResult.score - a.judgeResult.score;

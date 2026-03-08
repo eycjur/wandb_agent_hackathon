@@ -5,6 +5,7 @@
  */
 
 import type { DomainId } from "@/lib/config/domainPromptLoader";
+import type { EvaluationSourceType } from "@/lib/contracts/generateEvaluate";
 import { logHumanFeedback } from "./weave/weaveLogger";
 
 export interface HumanFeedbackRecord {
@@ -12,6 +13,7 @@ export interface HumanFeedbackRecord {
   domain: DomainId;
   userInput: string;
   generatedOutput: string;
+  sourceType: EvaluationSourceType;
   judgeResult?: {
     score: number;
     reason: string;
@@ -32,6 +34,7 @@ export interface SaveHumanFeedbackInput {
   domain: DomainId;
   userInput: string;
   generatedOutput: string;
+  sourceType: EvaluationSourceType;
   judgeResult?: { score: number; reason: string; pass: boolean };
   humanScore: number;
   humanComment?: string;
@@ -43,6 +46,7 @@ export async function saveHumanFeedback(input: SaveHumanFeedbackInput): Promise<
     domain: input.domain,
     userInput: input.userInput,
     generatedOutput: input.generatedOutput,
+    sourceType: input.sourceType,
     judgeResult: input.judgeResult,
     humanScore: input.humanScore,
     humanComment: input.humanComment,
@@ -58,6 +62,7 @@ export async function saveHumanFeedback(input: SaveHumanFeedbackInput): Promise<
     humanComment: input.humanComment,
     userInput: input.userInput,
     generatedOutput: input.generatedOutput,
+    sourceType: input.sourceType,
     judgeResult: input.judgeResult
   }).catch((err) => console.warn("[humanFeedbackStore] weave log failed:", err));
 
